@@ -1,30 +1,86 @@
-# LigaSmart PWA development
+# Torneo Fut (Prototipo PWA)
 
-*Automatically synced with your [v0.app](https://v0.app) deployments*
+Sistema inteligente de gestión de torneos de fútbol amateur enfocado en la región Orizaba–Córdoba. Proyecto de estadía con enfoque web + móvil (PWA). **Este repositorio contiene un prototipo funcional sin base de datos real.**
 
-[![Deployed on Vercel](https://img.shields.io/badge/Deployed%20on-Vercel-black?style=for-the-badge&logo=vercel)](https://vercel.com/elinfiltradordecodigos-projects/v0-liga-smart-pwa-development)
-[![Built with v0](https://img.shields.io/badge/Built%20with-v0.app-black?style=for-the-badge)](https://v0.app/chat/tGLUoANxoPT)
+---
 
-## Overview
+## ¿Qué busca resolver?
+Actualmente la gestión se hace con Excel, WhatsApp y papel, lo que provoca:
+- Errores humanos
+- Información desactualizada
+- Sobrecarga para organizadores
+- Baja transparencia y acceso limitado a estadísticas
 
-This repository will stay in sync with your deployed chats on [v0.app](https://v0.app).
-Any changes you make to your deployed app will be automatically pushed to this repository from [v0.app](https://v0.app).
+---
 
-## Deployment
+## ¿Qué hace el sistema?
+Registro centralizado de:
+- Equipos
+- Jugadores
+- Árbitros
+- Entrenadores
+- Programación de partidos
 
-Your project is live at:
+Captura y generación automática de:
+- Incidencias en tiempo real
+- Tablas de posiciones
+- Reportes y estadísticas
+- Predicciones simples de resultados
 
-**[https://vercel.com/elinfiltradordecodigos-projects/v0-liga-smart-pwa-development](https://vercel.com/elinfiltradordecodigos-projects/v0-liga-smart-pwa-development)**
+---
 
-## Build your app
+## Estado del proyecto
+**Prototipo funcional (sin backend):**
+- Persistencia simulada en `localStorage`.
+- Datos de ejemplo precargados.
+- Sin integración con servicios externos.
 
-Continue building your app on:
+---
 
-**[https://v0.app/chat/tGLUoANxoPT](https://v0.app/chat/tGLUoANxoPT)**
+## Roles
+- **Administrador**: control total (usuarios, torneos, equipos, árbitros, entrenadores, partidos)
+- **Árbitro**: gestión de partidos y eventos
+- **Entrenador**: gestión de equipos y jugadores
+- **Aficionado**: consulta
 
-## How It Works
+---
 
-1. Create and modify your project using [v0.app](https://v0.app)
-2. Deploy your chats from the v0 interface
-3. Changes are automatically pushed to this repository
-4. Vercel deploys the latest version from this repository
+## Módulos principales
+- Autenticación y gestión de usuarios
+- Torneos
+- Equipos y jugadores
+- Árbitros y entrenadores
+- Partidos y eventos
+- Estadísticas y predicciones
+- Perfil de usuario
+
+---
+
+## Tecnologías
+- Next.js (App Router)
+- React
+- Tailwind CSS
+- Componentes UI basados en Radix/shadcn
+- PWA (manifest + íconos)
+
+---
+
+## Ejecutar el proyecto
+```bash
+pnpm install
+pnpm dev
+```
+
+---
+
+## Notas importantes
+- Este proyecto es un **prototipo**.
+- No hay base de datos ni API real.
+- La autenticación es simulada y local.
+
+---
+
+## Documentación adicional
+- `docs/README.md`: guía para la ESR IEEE 830
+- `docs/READMEIA.md`: contexto técnico resumido para IA
+
