@@ -5,7 +5,7 @@ Este archivo resume el prototipo para que una IA pueda entender rápidamente el 
 ---
 
 ## Resumen del producto
-- **Nombre**: Torneo Fut / LigaSmart (prototipo de gestión de torneos amateur)
+- **Nombre**: Torneo Fut / FutPro (prototipo de gestión de torneos amateur)
 - **Objetivo**: centralizar la operación de ligas locales (Orizaba–Córdoba)
 - **Plataforma**: Web + PWA (Next.js)
 - **Estado**: prototipo sin backend; persistencia local con `localStorage`
@@ -34,17 +34,15 @@ Este archivo resume el prototipo para que una IA pueda entender rápidamente el 
 ---
 
 ## Persistencia (localStorage)
-- **Torneos**: `ligasmart_tournaments`
-- **Equipos**: `ligasmart_teams`
-- **Jugadores**: `ligasmart_players`
-- **Partidos**: `ligasmart_matches`
-- **Eventos**: `ligasmart_events`
-- **Tabla**: `ligasmart_standings`
-- **Árbitros**: `ligasmart_referees`
-- **Entrenadores**: `ligasmart_coaches`
-- **Usuarios** (auth): `torneofut_users` y sesión `torneofut_user`
-
-Nota: hay inconsistencias con algunas claves (ver sección de issues).
+- **Torneos**: `futpro_tournaments`
+- **Equipos**: `futpro_teams`
+- **Jugadores**: `futpro_players`
+- **Partidos**: `futpro_matches`
+- **Eventos**: `futpro_match_events`
+- **Tabla**: `futpro_standings`
+- **Árbitros**: `futpro_referees`
+- **Entrenadores**: `futpro_coaches`
+- **Usuarios** (auth): `futpro_users` y sesión `futpro_user`
 
 ---
 
@@ -75,12 +73,6 @@ Nota: hay inconsistencias con algunas claves (ver sección de issues).
 
 ---
 
-## Issues conocidos (inconsistencias)
-- **Usuarios**: `auth-context.tsx` usa `torneofut_users` pero `user-management.tsx` usa `ligasmart_users`.
-- **Eventos**: `sample-data.ts` guarda `ligasmart_match_events` pero `storage.ts` lee `ligasmart_events`.
-
----
-
 ## Datos de ejemplo
 `lib/sample-data.ts` precarga torneos, equipos, jugadores, árbitros, entrenadores, partidos y eventos.
 
@@ -92,4 +84,3 @@ Cuando generes documentos (ESR, manual, etc.), enfatiza:
 - Enfoque regional Orizaba–Córdoba.
 - Roles y módulos CRUD.
 - Estadísticas y predicciones simples (no IA real).
-

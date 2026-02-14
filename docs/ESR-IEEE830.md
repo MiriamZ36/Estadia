@@ -1,6 +1,6 @@
 # ESR/ERS IEEE 830 — Información base del proyecto
 
-Este documento concentra la información necesaria para redactar la **Especificación de Requisitos de Software (ERS/ESR)** conforme a **IEEE 830** del proyecto **Torneo Fut / LigaSmart**.
+Este documento concentra la información necesaria para redactar la **Especificación de Requisitos de Software (ERS/ESR)** conforme a **IEEE 830** del proyecto **Torneo Fut / FutPro**.
 
 > Estado: prototipo funcional sin backend. Persistencia local mediante `localStorage` con datos de ejemplo.
 
@@ -159,7 +159,7 @@ Aplicación web/PWA construida con Next.js (App Router). Persistencia simulada e
 
 ### 4.3 Checklist para completar la ESR
 - [ ] Validar alcance con el asesor.
-- [ ] Confirmar terminología usada (Torneo Fut / LigaSmart / FutPro).
+- [ ] Confirmar terminología usada (FutPro).
 - [ ] Ajustar requisitos según evaluación con ligas reales.
 - [ ] Agregar casos de uso relevantes.
 - [ ] Añadir criterios de aceptación por requisito.

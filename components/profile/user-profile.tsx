@@ -22,7 +22,7 @@ export function UserProfile() {
   const handleSave = () => {
     if (!user) return
 
-    const users = JSON.parse(localStorage.getItem("torneofut_users") || "[]")
+    const users = JSON.parse(localStorage.getItem("futpro_users") || "[]")
     const updatedUsers = users.map((u: any) => {
       if (u.id === user.id) {
         return { ...u, name: formData.name, email: formData.email, photo: formData.photo }
@@ -30,10 +30,10 @@ export function UserProfile() {
       return u
     })
 
-    localStorage.setItem("torneofut_users", JSON.stringify(updatedUsers))
+    localStorage.setItem("futpro_users", JSON.stringify(updatedUsers))
 
     const updatedUser = { ...user, name: formData.name, email: formData.email, photo: formData.photo }
-    localStorage.setItem("torneofut_user", JSON.stringify(updatedUser))
+    localStorage.setItem("futpro_user", JSON.stringify(updatedUser))
 
     window.location.reload()
   }

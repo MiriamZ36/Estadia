@@ -40,7 +40,7 @@ export function UserManagement() {
   }, [])
 
   const loadUsers = () => {
-    const storedUsers = JSON.parse(localStorage.getItem("ligasmart_users") || "[]")
+    const storedUsers = JSON.parse(localStorage.getItem("futpro_users") || "[]")
     setUsers(storedUsers)
   }
 
@@ -66,7 +66,7 @@ export function UserManagement() {
 
     if (confirm("¿Estás seguro de que deseas eliminar este usuario?")) {
       const updatedUsers = users.filter((u) => u.id !== userId)
-      localStorage.setItem("ligasmart_users", JSON.stringify(updatedUsers))
+      localStorage.setItem("futpro_users", JSON.stringify(updatedUsers))
       loadUsers()
     }
   }

@@ -14,7 +14,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 const initializeDefaultUsers = () => {
-  const users = localStorage.getItem("torneofut_users")
+  const users = localStorage.getItem("futpro_users")
   if (!users) {
     const defaultUsers = [
       {
@@ -42,7 +42,7 @@ const initializeDefaultUsers = () => {
         createdAt: new Date().toISOString(),
       },
     ]
-    localStorage.setItem("torneofut_users", JSON.stringify(defaultUsers))
+    localStorage.setItem("futpro_users", JSON.stringify(defaultUsers))
   }
 }
 
@@ -53,7 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     initializeDefaultUsers()
 
-    const storedUser = localStorage.getItem("torneofut_user")
+    const storedUser = localStorage.getItem("futpro_user")
     if (storedUser) {
       setUser(JSON.parse(storedUser))
     }
@@ -61,20 +61,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const login = async (email: string, password: string): Promise<boolean> => {
-    const users = JSON.parse(localStorage.getItem("torneofut_users") || "[]")
+    const users = JSON.parse(localStorage.getItem("futpro_users") || "[]")
     const foundUser = users.find((u: User & { password: string }) => u.email === email && u.password === password)
 
     if (foundUser) {
       const { password: _, ...userWithoutPassword } = foundUser
       setUser(userWithoutPassword)
-      localStorage.setItem("torneofut_user", JSON.stringify(userWithoutPassword))
+      localStorage.setItem("futpro_user", JSON.stringify(userWithoutPassword))
       return true
     }
     return false
   }
 
   const register = async (name: string, email: string, password: string, role: User["role"]): Promise<boolean> => {
-    const users = JSON.parse(localStorage.getItem("torneofut_users") || "[]")
+    const users = JSON.parse(localStorage.getItem("futpro_users") || "[]")
 
     if (users.find((u: User) => u.email === email)) {
       return false
@@ -90,17 +90,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     users.push(newUser)
-    localStorage.setItem("torneofut_users", JSON.stringify(users))
+    localStorage.setItem("futpro_users", JSON.stringify(users))
 
     const { password: _, ...userWithoutPassword } = newUser
     setUser(userWithoutPassword)
-    localStorage.setItem("torneofut_user", JSON.stringify(userWithoutPassword))
+    localStorage.setItem("futpro_user", JSON.stringify(userWithoutPassword))
     return true
   }
 
   const logout = () => {
     setUser(null)
-    localStorage.removeItem("torneofut_user")
+    localStorage.removeItem("futpro_user")
   }
 
   return <AuthContext.Provider value={{ user, login, register, logout, isLoading }}>{children}</AuthContext.Provider>

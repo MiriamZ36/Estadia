@@ -1,14 +1,14 @@
 import type { Tournament, Team, Player, Match, MatchEvent, Standing, Referee, Coach } from "./types"
 
 const STORAGE_KEYS = {
-  TOURNAMENTS: "ligasmart_tournaments",
-  TEAMS: "ligasmart_teams",
-  PLAYERS: "ligasmart_players",
-  MATCHES: "ligasmart_matches",
-  EVENTS: "ligasmart_events",
-  STANDINGS: "ligasmart_standings",
-  REFEREES: "ligasmart_referees", // Nueva clave para árbitros
-  COACHES: "ligasmart_coaches", // Nueva clave para entrenadores
+  TOURNAMENTS: "futpro_tournaments",
+  TEAMS: "futpro_teams",
+  PLAYERS: "futpro_players",
+  MATCHES: "futpro_matches",
+  EVENTS: "futpro_match_events",
+  STANDINGS: "futpro_standings",
+  REFEREES: "futpro_referees", // Nueva clave para árbitros
+  COACHES: "futpro_coaches", // Nueva clave para entrenadores
 }
 
 // Tournaments
@@ -167,11 +167,11 @@ export const clearAllData = () => {
 }
 
 export const clearDataExceptUsers = () => {
-  const users = localStorage.getItem("ligasmart_users")
+  const users = localStorage.getItem("futpro_users")
   Object.values(STORAGE_KEYS).forEach((key) => {
     localStorage.removeItem(key)
   })
   if (users) {
-    localStorage.setItem("ligasmart_users", users)
+    localStorage.setItem("futpro_users", users)
   }
 }

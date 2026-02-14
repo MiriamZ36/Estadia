@@ -1,4 +1,4 @@
-# Diccionario de Base de Datos — Torneo Fut / LigaSmart (Supabase)
+# Diccionario de Base de Datos — Torneo Fut / FutPro (Supabase)
 
 Este documento resume tablas, campos, tipos y relaciones para redactar el diccionario de datos del sistema.
 

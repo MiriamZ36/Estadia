@@ -1,4 +1,4 @@
--- Supabase SQL schema for Torneo Fut / LigaSmart
+-- Supabase SQL schema for Torneo Fut / FutPro
 -- Schema: public | IDs: UUID | Auth: Supabase Auth + profiles
 
 create extension if not exists "pgcrypto";
