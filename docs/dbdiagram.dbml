@@ -1,0 +1,134 @@
+Table profiles {
+  id uuid [pk]
+  name text
+  role text
+  photo_url text
+  created_at timestamptz
+  updated_at timestamptz
+}
+
+Table coaches {
+  id uuid [pk]
+  name text
+  photo_url text
+  license text
+  experience int
+  email text
+  phone text
+  specialty text
+  created_at timestamptz
+  updated_at timestamptz
+}
+
+Table referees {
+  id uuid [pk]
+  name text
+  photo_url text
+  license text
+  experience int
+  email text
+  phone text
+  created_at timestamptz
+  updated_at timestamptz
+}
+
+Table tournaments {
+  id uuid [pk]
+  name text
+  format text
+  start_date date
+  end_date date
+  status text
+  organizer_id uuid
+  rules text
+  created_at timestamptz
+  updated_at timestamptz
+}
+
+Table teams {
+  id uuid [pk]
+  tournament_id uuid
+  name text
+  logo_url text
+  founded_date date
+  coach_id uuid
+  created_at timestamptz
+  updated_at timestamptz
+}
+
+Table players {
+  id uuid [pk]
+  team_id uuid
+  name text
+  position text
+  number int
+  photo_url text
+  birth_date date
+  nationality text
+  height_cm int
+  weight_kg int
+  dominant_foot text
+  email text
+  phone text
+  emergency_contact text
+  blood_type text
+  medical_notes text
+  created_at timestamptz
+  updated_at timestamptz
+}
+
+Table matches {
+  id uuid [pk]
+  tournament_id uuid
+  home_team_id uuid
+  away_team_id uuid
+  match_date date
+  match_time time
+  venue text
+  status text
+  home_score int
+  away_score int
+  referee_id uuid
+  created_at timestamptz
+  updated_at timestamptz
+}
+
+Table match_events {
+  id uuid [pk]
+  match_id uuid
+  type text
+  player_id uuid
+  team_id uuid
+  minute int
+  description text
+  created_at timestamptz
+}
+
+Table standings {
+  tournament_id uuid [pk]
+  team_id uuid [pk]
+  played int
+  won int
+  drawn int
+  lost int
+  goals_for int
+  goals_against int
+  goal_difference int
+  points int
+  updated_at timestamptz
+}
+
+// Relationships
+Ref: profiles.id < tournaments.organizer_id
+Ref: coaches.id < teams.coach_id
+Ref: tournaments.id < teams.tournament_id
+Ref: teams.id < players.team_id
+Ref: tournaments.id < matches.tournament_id
+Ref: teams.id < matches.home_team_id
+Ref: teams.id < matches.away_team_id
+Ref: referees.id < matches.referee_id
+Ref: matches.id < match_events.match_id
+Ref: players.id < match_events.player_id
+Ref: teams.id < match_events.team_id
+Ref: tournaments.id < standings.tournament_id
+Ref: teams.id < standings.team_id
