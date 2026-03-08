@@ -12,6 +12,8 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 type ProgressState = {
   open: boolean
@@ -35,6 +37,9 @@ export function CoachList() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [progressState, setProgressState] = useState<ProgressState>(idleProgress)
+  const [searchTerm, setSearchTerm] = useState("")
+  const [specialtyFilter, setSpecialtyFilter] = useState("all")
+  const [assignmentFilter, setAssignmentFilter] = useState("all")
 
   useEffect(() => {
     void loadData()
@@ -150,6 +155,20 @@ export function CoachList() {
   }
 
   const canManage = user?.role === "admin"
+  const availableSpecialties = Array.from(new Set(coaches.map((coach) => coach.specialty).filter(Boolean))).sort()
+  const filteredCoaches = coaches.filter((coach) => {
+    const normalizedSearch = searchTerm.trim().toLowerCase()
+    const matchesSearch =
+      !normalizedSearch ||
+      coach.name.toLowerCase().includes(normalizedSearch) ||
+      coach.email.toLowerCase().includes(normalizedSearch)
+    const matchesSpecialty = specialtyFilter === "all" || (coach.specialty || "") === specialtyFilter
+    const matchesAssignment =
+      assignmentFilter === "all" ||
+      (assignmentFilter === "assigned" ? Boolean(coach.teamName) : !coach.teamName)
+
+    return matchesSearch && matchesSpecialty && matchesAssignment
+  })
 
   return (
     <div className="space-y-6">
@@ -172,8 +191,39 @@ export function CoachList() {
           </div>
         </CardHeader>
         <CardContent>
+          <div className="mb-4 grid gap-3 md:grid-cols-3">
+            <Input
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              placeholder="Buscar por nombre o email"
+            />
+            <Select value={specialtyFilter} onValueChange={setSpecialtyFilter}>
+              <SelectTrigger>
+                <SelectValue placeholder="Filtrar por especialidad" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas las especialidades</SelectItem>
+                {availableSpecialties.map((specialty) => (
+                  <SelectItem key={specialty} value={specialty!}>
+                    {specialty}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={assignmentFilter} onValueChange={setAssignmentFilter}>
+              <SelectTrigger>
+                <SelectValue placeholder="Filtrar por equipo" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                <SelectItem value="assigned">Con equipo</SelectItem>
+                <SelectItem value="unassigned">Sin equipo</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {coaches.map((coach) => (
+            {filteredCoaches.map((coach) => (
               <Card key={coach.id} className="overflow-hidden">
                 <CardContent className="p-4">
                   <div className="flex items-start gap-3">
@@ -212,11 +262,11 @@ export function CoachList() {
               </Card>
             ))}
           </div>
-          {coaches.length === 0 && (
+          {filteredCoaches.length === 0 && (
             <div className="py-12 text-center">
               <ClipboardList className="mx-auto h-12 w-12 text-muted-foreground" />
-              <h3 className="mt-4 text-lg font-semibold">No hay entrenadores registrados</h3>
-              <p className="text-muted-foreground">Comienza agregando un nuevo entrenador</p>
+              <h3 className="mt-4 text-lg font-semibold">No se encontraron entrenadores</h3>
+              <p className="text-muted-foreground">Ajusta la busqueda o los filtros para ver resultados</p>
             </div>
           )}
         </CardContent>
