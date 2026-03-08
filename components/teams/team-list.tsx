@@ -11,6 +11,7 @@ import { ProgressDialog } from "@/components/ui/progress-dialog"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Input } from "@/components/ui/input"
 import {
   Dialog,
   DialogContent,
@@ -36,7 +37,9 @@ export function TeamList() {
   const { user } = useAuth()
   const { toast } = useToast()
   const [tournaments, setTournaments] = useState<Tournament[]>([])
-  const [selectedTournament, setSelectedTournament] = useState<string>("")
+  const [selectedTournament, setSelectedTournament] = useState<string>("all")
+  const [assignmentFilter, setAssignmentFilter] = useState<string>("all")
+  const [searchTerm, setSearchTerm] = useState("")
   const [teams, setTeams] = useState<Team[]>([])
   const [playerCounts, setPlayerCounts] = useState<Record<string, number>>({})
   const [selectedTeam, setSelectedTeam] = useState<Team | null>(null)
@@ -48,17 +51,9 @@ export function TeamList() {
 
   useEffect(() => {
     void loadTournaments()
+    void loadTeams()
+    void loadPlayerCounts()
   }, [])
-
-  useEffect(() => {
-    if (selectedTournament) {
-      void loadTeams(selectedTournament)
-      void loadPlayerCounts()
-    } else {
-      void loadTeams()
-      void loadPlayerCounts()
-    }
-  }, [selectedTournament])
 
   const openProgress = (title: string, description: string) => {
     setProgressState({
@@ -90,14 +85,10 @@ export function TeamList() {
     const mappedTournaments: Tournament[] = result.tournaments || []
     setTournaments(mappedTournaments)
 
-    if (mappedTournaments.length > 0 && !selectedTournament) {
-      setSelectedTournament(mappedTournaments[0].id)
-    }
   }
 
-  const loadTeams = async (tournamentId?: string) => {
-    const endpoint = tournamentId ? `/api/teams?tournamentId=${tournamentId}` : "/api/teams"
-    const response = await fetch(endpoint, {
+  const loadTeams = async () => {
+    const response = await fetch("/api/teams", {
       cache: "no-store",
     })
     const result = await response.json()
@@ -161,7 +152,7 @@ export function TeamList() {
       return
     }
 
-    await loadTeams(selectedTournament || undefined)
+    await loadTeams()
     await loadPlayerCounts()
 
     setIsDialogOpen(false)
@@ -196,7 +187,7 @@ export function TeamList() {
     const deletedTeamName = teamToDelete.name
     setTeamToDelete(null)
 
-    await loadTeams(selectedTournament || undefined)
+    await loadTeams()
     await loadPlayerCounts()
 
     toast({
@@ -220,6 +211,16 @@ export function TeamList() {
   }
 
   const canManage = user?.role === "admin" || user?.role === "coach"
+  const filteredTeams = teams.filter((team) => {
+    const matchesTournament = selectedTournament === "all" || team.tournamentId === selectedTournament
+    const matchesAssignment =
+      assignmentFilter === "all" ||
+      (assignmentFilter === "assigned" ? Boolean(team.tournamentId) : !team.tournamentId)
+    const normalizedSearch = searchTerm.trim().toLowerCase()
+    const matchesSearch = !normalizedSearch || team.name.toLowerCase().includes(normalizedSearch)
+
+    return matchesTournament && matchesAssignment && matchesSearch
+  })
 
   if (viewingTeamId) {
     const team = teams.find((item) => item.id === viewingTeamId)
@@ -243,13 +244,19 @@ export function TeamList() {
         )}
       </div>
 
-      <div className="flex flex-col gap-4 sm:flex-row">
+      <div className="grid gap-3 md:grid-cols-3">
+        <Input
+          value={searchTerm}
+          onChange={(event) => setSearchTerm(event.target.value)}
+          placeholder="Buscar equipo por nombre"
+        />
         <div className="flex-1">
           <Select value={selectedTournament} onValueChange={setSelectedTournament}>
             <SelectTrigger>
-              <SelectValue placeholder="Selecciona un torneo" />
+              <SelectValue placeholder="Filtrar por torneo" />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="all">Todos los torneos</SelectItem>
               {tournaments.map((tournament) => (
                 <SelectItem key={tournament.id} value={tournament.id}>
                   {tournament.name} - Futbol {tournament.format}
@@ -258,21 +265,26 @@ export function TeamList() {
             </SelectContent>
           </Select>
         </div>
+        <div className="flex-1">
+          <Select value={assignmentFilter} onValueChange={setAssignmentFilter}>
+            <SelectTrigger>
+              <SelectValue placeholder="Filtrar por asignacion" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos</SelectItem>
+              <SelectItem value="assigned">Asignados a torneo</SelectItem>
+              <SelectItem value="unassigned">Sin asignar</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
-      {!selectedTournament && tournaments.length > 0 ? (
+      {filteredTeams.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
             <UsersIcon className="mb-4 h-12 w-12 text-muted-foreground" />
-            <p className="text-lg font-medium">Selecciona un torneo para ver los equipos</p>
-          </CardContent>
-        </Card>
-      ) : teams.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <UsersIcon className="mb-4 h-12 w-12 text-muted-foreground" />
-            <p className="mb-2 text-lg font-medium">No hay equipos registrados</p>
-            <p className="mb-4 text-sm text-muted-foreground">Comienza agregando tu primer equipo</p>
+            <p className="mb-2 text-lg font-medium">No se encontraron equipos</p>
+            <p className="mb-4 text-sm text-muted-foreground">Ajusta la busqueda o los filtros para ver resultados</p>
             {canManage && (
               <Button onClick={handleCreate}>
                 <Plus className="mr-2 h-4 w-4" />
@@ -283,7 +295,7 @@ export function TeamList() {
         </Card>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {teams.map((team) => (
+          {filteredTeams.map((team) => (
             <Card key={team.id} className="transition-shadow hover:shadow-lg">
               <CardHeader>
                 <div className="flex items-start justify-between">
@@ -327,7 +339,7 @@ export function TeamList() {
 
       <TeamDialog
         team={selectedTeam}
-        tournamentId={selectedTournament}
+        tournamentId={selectedTournament === "all" ? "" : selectedTournament}
         tournaments={tournaments}
         open={isDialogOpen}
         onOpenChange={setIsDialogOpen}
