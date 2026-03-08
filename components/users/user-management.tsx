@@ -2,8 +2,10 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useEffect, useState } from "react"
+import { AlertTriangle, Trash2, UserPlus } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
+import { useToast } from "@/hooks/use-toast"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import {
@@ -19,15 +21,16 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { UserPlus, Trash2, AlertTriangle } from "lucide-react"
 import type { User } from "@/lib/types"
 import { clearDataExceptUsers } from "@/lib/storage"
 
 export function UserManagement() {
   const { user: currentUser, register } = useAuth()
-  const [users, setUsers] = useState<(User & { password?: string })[]>([])
+  const { toast } = useToast()
+  const [users, setUsers] = useState<User[]>([])
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isClearDialogOpen, setIsClearDialogOpen] = useState(false)
+  const [userToDelete, setUserToDelete] = useState<User | null>(null)
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -36,55 +39,101 @@ export function UserManagement() {
   })
 
   useEffect(() => {
-    loadUsers()
+    void loadUsers()
   }, [])
 
-  const loadUsers = () => {
-    const storedUsers = JSON.parse(localStorage.getItem("futpro_users") || "[]")
-    setUsers(storedUsers)
+  const loadUsers = async () => {
+    const response = await fetch("/api/admin/users", {
+      cache: "no-store",
+    })
+
+    const result = await response.json()
+
+    if (!response.ok) {
+      toast({
+        variant: "destructive",
+        title: "No fue posible cargar usuarios",
+        description: result.error || "La lista de usuarios no pudo recuperarse.",
+      })
+      return
+    }
+
+    setUsers(result.users || [])
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    const success = await register(formData.name, formData.email, formData.password, formData.role)
+    const result = await register(formData.name, formData.email, formData.password, formData.role)
 
-    if (success) {
-      setIsDialogOpen(false)
-      setFormData({ name: "", email: "", password: "", role: "fan" })
-      loadUsers()
-    } else {
-      alert("El correo electrónico ya está en uso")
-    }
-  }
-
-  const handleDelete = (userId: string) => {
-    if (userId === currentUser?.id) {
-      alert("No puedes eliminar tu propia cuenta")
+    if (!result.success) {
+      toast({
+        variant: "destructive",
+        title: "No fue posible crear el usuario",
+        description: result.error,
+      })
       return
     }
 
-    if (confirm("¿Estás seguro de que deseas eliminar este usuario?")) {
-      const updatedUsers = users.filter((u) => u.id !== userId)
-      localStorage.setItem("futpro_users", JSON.stringify(updatedUsers))
-      loadUsers()
+    setIsDialogOpen(false)
+    setFormData({ name: "", email: "", password: "", role: "fan" })
+    await loadUsers()
+
+    toast({
+      title: "Usuario creado",
+      description: result.message,
+    })
+  }
+
+  const handleDelete = async () => {
+    if (!userToDelete) return
+
+    const response = await fetch("/api/admin/users", {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ id: userToDelete.id }),
+    })
+
+    const result = await response.json()
+
+    if (!response.ok) {
+      toast({
+        variant: "destructive",
+        title: "No fue posible eliminar el usuario",
+        description: result.error,
+      })
+      return
     }
+
+    setUserToDelete(null)
+    await loadUsers()
+
+    toast({
+      title: "Usuario eliminado",
+      description: "La cuenta fue eliminada correctamente.",
+    })
   }
 
   const handleClearData = () => {
     clearDataExceptUsers()
     setIsClearDialogOpen(false)
-    alert("Todos los datos (excepto usuarios) han sido eliminados exitosamente")
+    toast({
+      title: "Datos reiniciados",
+      description: "Se eliminaron los datos operativos y se conservaron los usuarios.",
+    })
     window.location.reload()
   }
 
   const getRoleBadge = (role: User["role"]) => {
     const roleConfig = {
       admin: { label: "Administrador", variant: "default" as const },
-      referee: { label: "Árbitro", variant: "secondary" as const },
+      referee: { label: "Arbitro", variant: "secondary" as const },
       coach: { label: "Entrenador", variant: "outline" as const },
       fan: { label: "Aficionado", variant: "outline" as const },
     }
+
     return roleConfig[role]
   }
 
@@ -93,7 +142,7 @@ export function UserManagement() {
       <Card>
         <CardHeader>
           <CardTitle>Acceso Denegado</CardTitle>
-          <CardDescription>Solo los administradores pueden acceder a esta sección</CardDescription>
+          <CardDescription>Solo los administradores pueden acceder a esta seccion</CardDescription>
         </CardHeader>
       </Card>
     )
@@ -103,28 +152,27 @@ export function UserManagement() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-3xl font-bold">Gestión de Usuarios</h2>
-          <p className="text-muted-foreground">Administra los usuarios del sistema</p>
+          <h2 className="text-3xl font-bold">Gestion de Usuarios</h2>
+          <p className="text-muted-foreground">Administra los usuarios reales del sistema</p>
         </div>
         <div className="flex gap-2">
           <Dialog open={isClearDialogOpen} onOpenChange={setIsClearDialogOpen}>
             <DialogTrigger asChild>
               <Button variant="destructive">
-                <AlertTriangle className="h-4 w-4 mr-2" />
+                <AlertTriangle className="mr-2 h-4 w-4" />
                 Limpiar Datos
               </Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Confirmar Eliminación de Datos</DialogTitle>
+                <DialogTitle>Confirmar eliminacion de datos</DialogTitle>
                 <DialogDescription>
-                  Esta acción eliminará todos los torneos, equipos, jugadores, partidos, árbitros y entrenadores del
-                  sistema. Los usuarios no serán afectados. Esta acción no se puede deshacer.
+                  Esta accion elimina datos operativos locales del prototipo. Las cuentas y perfiles permanecen.
                 </DialogDescription>
               </DialogHeader>
               <div className="flex gap-2">
                 <Button variant="destructive" onClick={handleClearData} className="flex-1">
-                  Confirmar Eliminación
+                  Confirmar eliminacion
                 </Button>
                 <Button variant="outline" onClick={() => setIsClearDialogOpen(false)}>
                   Cancelar
@@ -136,18 +184,18 @@ export function UserManagement() {
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
               <Button>
-                <UserPlus className="h-4 w-4 mr-2" />
+                <UserPlus className="mr-2 h-4 w-4" />
                 Crear Usuario
               </Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Crear Nuevo Usuario</DialogTitle>
-                <DialogDescription>Completa los datos del nuevo usuario del sistema</DialogDescription>
+                <DialogTitle>Crear nuevo usuario</DialogTitle>
+                <DialogDescription>Completa los datos del nuevo acceso del sistema.</DialogDescription>
               </DialogHeader>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="name">Nombre Completo</Label>
+                  <Label htmlFor="name">Nombre completo</Label>
                   <Input
                     id="name"
                     value={formData.name}
@@ -156,7 +204,7 @@ export function UserManagement() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="email">Correo Electrónico</Label>
+                  <Label htmlFor="email">Correo electronico</Label>
                   <Input
                     id="email"
                     type="email"
@@ -166,7 +214,7 @@ export function UserManagement() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="password">Contraseña</Label>
+                  <Label htmlFor="password">Contrasena</Label>
                   <Input
                     id="password"
                     type="password"
@@ -187,7 +235,7 @@ export function UserManagement() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="admin">Administrador</SelectItem>
-                      <SelectItem value="referee">Árbitro</SelectItem>
+                      <SelectItem value="referee">Arbitro</SelectItem>
                       <SelectItem value="coach">Entrenador</SelectItem>
                       <SelectItem value="fan">Aficionado</SelectItem>
                     </SelectContent>
@@ -209,7 +257,7 @@ export function UserManagement() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Usuarios Registrados</CardTitle>
+          <CardTitle>Usuarios registrados</CardTitle>
           <CardDescription>Total de usuarios: {users.length}</CardDescription>
         </CardHeader>
         <CardContent>
@@ -219,13 +267,14 @@ export function UserManagement() {
                 <TableHead>Nombre</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Rol</TableHead>
-                <TableHead>Fecha de Registro</TableHead>
+                <TableHead>Fecha de registro</TableHead>
                 <TableHead className="text-right">Acciones</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {users.map((user) => {
                 const roleBadge = getRoleBadge(user.role)
+
                 return (
                   <TableRow key={user.id}>
                     <TableCell className="font-medium">{user.name}</TableCell>
@@ -233,12 +282,12 @@ export function UserManagement() {
                     <TableCell>
                       <Badge variant={roleBadge.variant}>{roleBadge.label}</Badge>
                     </TableCell>
-                    <TableCell>{new Date(user.createdAt).toLocaleDateString()}</TableCell>
+                    <TableCell>{new Date(user.createdAt).toLocaleDateString("es-MX")}</TableCell>
                     <TableCell className="text-right">
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => handleDelete(user.id)}
+                        onClick={() => setUserToDelete(user)}
                         disabled={user.id === currentUser?.id}
                       >
                         <Trash2 className="h-4 w-4 text-destructive" />
@@ -251,6 +300,27 @@ export function UserManagement() {
           </Table>
         </CardContent>
       </Card>
+
+      <Dialog open={Boolean(userToDelete)} onOpenChange={(open) => !open && setUserToDelete(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Eliminar usuario</DialogTitle>
+            <DialogDescription>
+              {userToDelete
+                ? `Se eliminara la cuenta de ${userToDelete.name}. Esta accion no se puede deshacer.`
+                : "Confirma la eliminacion del usuario."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-2">
+            <Button variant="destructive" onClick={handleDelete} className="flex-1">
+              Eliminar usuario
+            </Button>
+            <Button variant="outline" onClick={() => setUserToDelete(null)}>
+              Cancelar
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
