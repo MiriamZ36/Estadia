@@ -15,10 +15,10 @@ function formatTeamError(message: string) {
   }
 
   if (normalizedMessage.includes("violates foreign key constraint")) {
-    return "El torneo seleccionado no existe o no es valido."
+    return "La relacion del equipo con el torneo no es valida."
   }
 
-  return "No fue posible guardar el equipo."
+  return "No fue posible actualizar el equipo."
 }
 
 async function getSessionProfile() {
@@ -62,36 +62,7 @@ function mapTeam(row: {
   }
 }
 
-export async function GET(request: Request) {
-  const guard = await getSessionProfile()
-
-  if ("error" in guard) {
-    return NextResponse.json({ error: guard.error }, { status: guard.status })
-  }
-
-  const { searchParams } = new URL(request.url)
-  const tournamentId = searchParams.get("tournamentId")
-
-  const admin = createSupabaseAdminClient()
-  let query = admin
-    .from("teams")
-    .select("id, name, tournament_id, logo_url, founded_date, coach_id")
-    .order("name", { ascending: true })
-
-  if (tournamentId) {
-    query = query.eq("tournament_id", tournamentId)
-  }
-
-  const { data, error } = await query
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
-  }
-
-  return NextResponse.json({ teams: data.map(mapTeam) })
-}
-
-export async function POST(request: Request) {
+export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
   const guard = await getSessionProfile()
 
   if ("error" in guard) {
@@ -99,25 +70,23 @@ export async function POST(request: Request) {
   }
 
   if (!canManageTeams(guard.role)) {
-    return NextResponse.json({ error: "No tienes permisos para crear equipos." }, { status: 403 })
+    return NextResponse.json({ error: "No tienes permisos para editar equipos." }, { status: 403 })
   }
 
+  const { id } = await context.params
   const body = await request.json()
-
-  if (!body.name || !body.tournamentId) {
-    return NextResponse.json({ error: "Faltan campos obligatorios del equipo." }, { status: 400 })
-  }
-
   const admin = createSupabaseAdminClient()
+
   const { data, error } = await admin
     .from("teams")
-    .insert({
+    .update({
       name: body.name,
       tournament_id: body.tournamentId,
       logo_url: body.logo || null,
       founded_date: body.foundedDate || null,
       coach_id: body.coachId || null,
     })
+    .eq("id", id)
     .select("id, name, tournament_id, logo_url, founded_date, coach_id")
     .single()
 
@@ -126,4 +95,26 @@ export async function POST(request: Request) {
   }
 
   return NextResponse.json({ team: mapTeam(data) })
+}
+
+export async function DELETE(_request: Request, context: { params: Promise<{ id: string }> }) {
+  const guard = await getSessionProfile()
+
+  if ("error" in guard) {
+    return NextResponse.json({ error: guard.error }, { status: guard.status })
+  }
+
+  if (!canManageTeams(guard.role)) {
+    return NextResponse.json({ error: "No tienes permisos para eliminar equipos." }, { status: 403 })
+  }
+
+  const { id } = await context.params
+  const admin = createSupabaseAdminClient()
+  const { error } = await admin.from("teams").delete().eq("id", id)
+
+  if (error) {
+    return NextResponse.json({ error: "No fue posible eliminar el equipo." }, { status: 500 })
+  }
+
+  return NextResponse.json({ success: true })
 }

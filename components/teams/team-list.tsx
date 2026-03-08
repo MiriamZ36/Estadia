@@ -1,50 +1,114 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useEffect, useState } from "react"
+import { Pencil, Plus, Trash2, User, UsersIcon } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
 import { useToast } from "@/hooks/use-toast"
-import { useLoading } from "@/lib/loading-context"
-import { getTournaments, getTeams, saveTeam, deleteTeam } from "@/lib/storage"
 import type { Player, Tournament, Team } from "@/lib/types"
+import { PlayerList } from "./player-list"
+import { TeamDialog } from "./team-dialog"
+import { ProgressDialog } from "@/components/ui/progress-dialog"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Plus, UsersIcon, Pencil, Trash2, User } from "lucide-react"
-import { TeamDialog } from "./team-dialog"
-import { PlayerList } from "./player-list"
+
+type ProgressState = {
+  open: boolean
+  title: string
+  description: string
+}
+
+const idleProgress: ProgressState = {
+  open: false,
+  title: "",
+  description: "",
+}
 
 export function TeamList() {
   const { user } = useAuth()
   const { toast } = useToast()
-  const { startLoading, stopLoading } = useLoading()
   const [tournaments, setTournaments] = useState<Tournament[]>([])
   const [selectedTournament, setSelectedTournament] = useState<string>("")
   const [teams, setTeams] = useState<Team[]>([])
   const [playerCounts, setPlayerCounts] = useState<Record<string, number>>({})
   const [selectedTeam, setSelectedTeam] = useState<Team | null>(null)
+  const [teamToDelete, setTeamToDelete] = useState<Team | null>(null)
   const [viewingTeamId, setViewingTeamId] = useState<string | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const [progressState, setProgressState] = useState<ProgressState>(idleProgress)
 
   useEffect(() => {
-    const tournamentsData = getTournaments()
-    setTournaments(tournamentsData)
-    if (tournamentsData.length > 0 && !selectedTournament) {
-      setSelectedTournament(tournamentsData[0].id)
-    }
+    void loadTournaments()
   }, [])
 
   useEffect(() => {
     if (selectedTournament) {
-      loadTeams()
+      void loadTeams(selectedTournament)
       void loadPlayerCounts()
+    } else {
+      setTeams([])
     }
   }, [selectedTournament])
 
-  const loadTeams = () => {
-    if (selectedTournament) {
-      const data = getTeams(selectedTournament)
-      setTeams(data)
+  const openProgress = (title: string, description: string) => {
+    setProgressState({
+      open: true,
+      title,
+      description,
+    })
+  }
+
+  const closeProgress = () => {
+    setProgressState(idleProgress)
+  }
+
+  const loadTournaments = async () => {
+    const response = await fetch("/api/tournaments", {
+      cache: "no-store",
+    })
+    const result = await response.json()
+
+    if (!response.ok) {
+      toast({
+        variant: "destructive",
+        title: "No fue posible cargar torneos",
+        description: result.error || "Verifica la conexion con Supabase.",
+      })
+      return
     }
+
+    const mappedTournaments: Tournament[] = result.tournaments || []
+    setTournaments(mappedTournaments)
+
+    if (mappedTournaments.length > 0 && !selectedTournament) {
+      setSelectedTournament(mappedTournaments[0].id)
+    }
+  }
+
+  const loadTeams = async (tournamentId: string) => {
+    const response = await fetch(`/api/teams?tournamentId=${tournamentId}`, {
+      cache: "no-store",
+    })
+    const result = await response.json()
+
+    if (!response.ok) {
+      toast({
+        variant: "destructive",
+        title: "No fue posible cargar equipos",
+        description: result.error || "No se pudo recuperar la lista de equipos.",
+      })
+      return
+    }
+
+    setTeams(result.teams || [])
   }
 
   const loadPlayerCounts = async () => {
@@ -65,60 +129,90 @@ export function TeamList() {
     setPlayerCounts(counts)
   }
 
-  const handleSave = (team: Team) => {
-    try {
-      startLoading(team.id ? "Actualizando equipo..." : "Creando equipo...")
-      saveTeam(team)
-      loadTeams()
-      void loadPlayerCounts()
-      setIsDialogOpen(false)
-      setSelectedTeam(null)
+  const handleSave = async (team: Team) => {
+    const isEditing = Boolean(team.id)
+    setIsSaving(true)
+    openProgress(
+      isEditing ? "Actualizando equipo" : "Creando equipo",
+      isEditing ? "Guardando cambios del equipo en la base de datos." : "Registrando el nuevo equipo en la base de datos.",
+    )
+
+    const response = await fetch(isEditing ? `/api/teams/${team.id}` : "/api/teams", {
+      method: isEditing ? "PATCH" : "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(team),
+    })
+    const result = await response.json()
+
+    closeProgress()
+    setIsSaving(false)
+
+    if (!response.ok) {
       toast({
-        title: team.id ? "Equipo actualizado" : "Equipo creado",
-        description: `${team.name} ha sido ${team.id ? "actualizado" : "creado"} exitosamente.`,
-      })
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Ocurrió un error al guardar el equipo.",
         variant: "destructive",
+        title: "No fue posible guardar el equipo",
+        description: result.error || "La operacion no pudo completarse.",
       })
-    } finally {
-      stopLoading()
+      return
     }
+
+    if (selectedTournament) {
+      await loadTeams(selectedTournament)
+    }
+    await loadPlayerCounts()
+
+    setIsDialogOpen(false)
+    setSelectedTeam(null)
+
+    toast({
+      title: isEditing ? "Equipo actualizado" : "Equipo creado",
+      description: `${result.team.name} fue ${isEditing ? "actualizado" : "registrado"} correctamente.`,
+    })
   }
 
-  const handleEdit = (team: Team) => {
-    setSelectedTeam(team)
-    setIsDialogOpen(true)
-  }
+  const handleDelete = async () => {
+    if (!teamToDelete) return
 
-  const handleDelete = (id: string) => {
-    const team = teams.find((t) => t.id === id)
-    if (confirm("¿Estás seguro de eliminar este equipo? Se eliminarán también todos sus jugadores.")) {
-      try {
-        startLoading("Eliminando equipo...")
-        deleteTeam(id)
-        loadTeams()
-        void loadPlayerCounts()
-        toast({
-          title: "Equipo eliminado",
-          description: `${team?.name || "El equipo"} ha sido eliminado exitosamente.`,
-        })
-      } catch (error) {
-        toast({
-          title: "Error",
-          description: "Ocurrió un error al eliminar el equipo.",
-          variant: "destructive",
-        })
-      } finally {
-        stopLoading()
-      }
+    openProgress("Eliminando equipo", "Estamos eliminando el equipo y su informacion relacionada.")
+
+    const response = await fetch(`/api/teams/${teamToDelete.id}`, {
+      method: "DELETE",
+    })
+    const result = await response.json()
+    closeProgress()
+
+    if (!response.ok) {
+      toast({
+        variant: "destructive",
+        title: "No fue posible eliminar el equipo",
+        description: result.error || "La eliminacion no pudo completarse.",
+      })
+      return
     }
+
+    const deletedTeamName = teamToDelete.name
+    setTeamToDelete(null)
+
+    if (selectedTournament) {
+      await loadTeams(selectedTournament)
+    }
+    await loadPlayerCounts()
+
+    toast({
+      title: "Equipo eliminado",
+      description: `${deletedTeamName} fue eliminado correctamente.`,
+    })
   }
 
   const handleCreate = () => {
     setSelectedTeam(null)
+    setIsDialogOpen(true)
+  }
+
+  const handleEdit = (team: Team) => {
+    setSelectedTeam(team)
     setIsDialogOpen(true)
   }
 
@@ -129,7 +223,7 @@ export function TeamList() {
   const canManage = user?.role === "admin" || user?.role === "coach"
 
   if (viewingTeamId) {
-    const team = teams.find((t) => t.id === viewingTeamId)
+    const team = teams.find((item) => item.id === viewingTeamId)
     if (team) {
       return <PlayerList team={team} onBack={() => setViewingTeamId(null)} />
     }
@@ -137,20 +231,20 @@ export function TeamList() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
         <div>
           <h2 className="text-3xl font-bold">Equipos y Jugadores</h2>
           <p className="text-muted-foreground">Gestiona los equipos y sus plantillas</p>
         </div>
         {canManage && selectedTournament && (
           <Button onClick={handleCreate}>
-            <Plus className="h-4 w-4 mr-2" />
+            <Plus className="mr-2 h-4 w-4" />
             Nuevo Equipo
           </Button>
         )}
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-4">
+      <div className="flex flex-col gap-4 sm:flex-row">
         <div className="flex-1">
           <Select value={selectedTournament} onValueChange={setSelectedTournament}>
             <SelectTrigger>
@@ -159,7 +253,7 @@ export function TeamList() {
             <SelectContent>
               {tournaments.map((tournament) => (
                 <SelectItem key={tournament.id} value={tournament.id}>
-                  {tournament.name} - Fútbol {tournament.format}
+                  {tournament.name} - Futbol {tournament.format}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -170,19 +264,19 @@ export function TeamList() {
       {!selectedTournament ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
-            <UsersIcon className="h-12 w-12 text-muted-foreground mb-4" />
+            <UsersIcon className="mb-4 h-12 w-12 text-muted-foreground" />
             <p className="text-lg font-medium">Selecciona un torneo para ver los equipos</p>
           </CardContent>
         </Card>
       ) : teams.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
-            <UsersIcon className="h-12 w-12 text-muted-foreground mb-4" />
-            <p className="text-lg font-medium mb-2">No hay equipos registrados</p>
-            <p className="text-sm text-muted-foreground mb-4">Comienza agregando tu primer equipo</p>
+            <UsersIcon className="mb-4 h-12 w-12 text-muted-foreground" />
+            <p className="mb-2 text-lg font-medium">No hay equipos registrados</p>
+            <p className="mb-4 text-sm text-muted-foreground">Comienza agregando tu primer equipo</p>
             {canManage && (
               <Button onClick={handleCreate}>
-                <Plus className="h-4 w-4 mr-2" />
+                <Plus className="mr-2 h-4 w-4" />
                 Crear Equipo
               </Button>
             )}
@@ -191,13 +285,13 @@ export function TeamList() {
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {teams.map((team) => (
-            <Card key={team.id} className="hover:shadow-lg transition-shadow">
+            <Card key={team.id} className="transition-shadow hover:shadow-lg">
               <CardHeader>
-                <div className="flex justify-between items-start">
+                <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <CardTitle className="text-xl">{team.name}</CardTitle>
                     <CardDescription className="mt-2 flex items-center">
-                      <User className="h-4 w-4 mr-1" />
+                      <User className="mr-1 h-4 w-4" />
                       {getPlayerCount(team.id)} jugadores
                     </CardDescription>
                   </div>
@@ -206,7 +300,7 @@ export function TeamList() {
               <CardContent>
                 <div className="flex gap-2">
                   <Button variant="outline" size="sm" onClick={() => setViewingTeamId(team.id)} className="flex-1">
-                    <UsersIcon className="h-4 w-4 mr-2" />
+                    <UsersIcon className="mr-2 h-4 w-4" />
                     Ver Plantilla
                   </Button>
                   {canManage && (
@@ -214,7 +308,7 @@ export function TeamList() {
                       <Button variant="outline" size="sm" onClick={() => handleEdit(team)}>
                         <Pencil className="h-4 w-4" />
                       </Button>
-                      <Button variant="destructive" size="sm" onClick={() => handleDelete(team.id)}>
+                      <Button variant="destructive" size="sm" onClick={() => setTeamToDelete(team)}>
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </>
@@ -232,7 +326,31 @@ export function TeamList() {
         open={isDialogOpen}
         onOpenChange={setIsDialogOpen}
         onSave={handleSave}
+        isSaving={isSaving}
       />
+
+      <Dialog open={Boolean(teamToDelete)} onOpenChange={(open) => !open && setTeamToDelete(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Eliminar equipo</DialogTitle>
+            <DialogDescription>
+              {teamToDelete
+                ? `Se eliminara ${teamToDelete.name} y sus jugadores asociados. Esta accion no se puede deshacer.`
+                : "Confirma la eliminacion del equipo."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-2">
+            <Button variant="destructive" onClick={() => void handleDelete()} className="flex-1">
+              Eliminar
+            </Button>
+            <Button variant="outline" onClick={() => setTeamToDelete(null)}>
+              Cancelar
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <ProgressDialog open={progressState.open} title={progressState.title} description={progressState.description} />
     </div>
   )
 }
