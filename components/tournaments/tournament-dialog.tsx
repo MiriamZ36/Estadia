@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useEffect, useState } from "react"
 import type { Tournament } from "@/lib/types"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -22,11 +22,19 @@ interface TournamentDialogProps {
   tournament: Tournament | null
   open: boolean
   onOpenChange: (open: boolean) => void
-  onSave: (tournament: Tournament) => void
+  onSave: (tournament: Tournament) => Promise<void>
   userId: string
+  isSaving?: boolean
 }
 
-export function TournamentDialog({ tournament, open, onOpenChange, onSave, userId }: TournamentDialogProps) {
+export function TournamentDialog({
+  tournament,
+  open,
+  onOpenChange,
+  onSave,
+  userId,
+  isSaving = false,
+}: TournamentDialogProps) {
   const [formData, setFormData] = useState<Partial<Tournament>>({
     name: "",
     format: "11",
@@ -39,42 +47,44 @@ export function TournamentDialog({ tournament, open, onOpenChange, onSave, userI
   useEffect(() => {
     if (tournament) {
       setFormData(tournament)
-    } else {
-      setFormData({
-        name: "",
-        format: "11",
-        startDate: "",
-        endDate: "",
-        status: "upcoming",
-        rules: "",
-      })
+      return
     }
-  }, [tournament])
 
-  const handleSubmit = (e: React.FormEvent) => {
+    setFormData({
+      name: "",
+      format: "11",
+      startDate: "",
+      endDate: "",
+      status: "upcoming",
+      rules: "",
+    })
+  }, [tournament, open])
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
     const tournamentData: Tournament = {
-      id: tournament?.id || Date.now().toString(),
+      id: tournament?.id || "",
       name: formData.name || "",
-      format: formData.format as "5" | "7" | "11",
+      format: (formData.format as "5" | "7" | "11") || "11",
       startDate: formData.startDate || "",
       endDate: formData.endDate || "",
-      status: formData.status as Tournament["status"],
+      status: (formData.status as Tournament["status"]) || "upcoming",
       organizerId: tournament?.organizerId || userId,
-      rules: formData.rules,
+      rules: formData.rules || undefined,
+      teamIds: tournament?.teamIds || [],
     }
 
-    onSave(tournamentData)
+    await onSave(tournamentData)
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(nextOpen) => !isSaving && onOpenChange(nextOpen)}>
       <DialogContent className="sm:max-w-[525px]">
         <DialogHeader>
           <DialogTitle>{tournament ? "Editar Torneo" : "Crear Nuevo Torneo"}</DialogTitle>
           <DialogDescription>
-            {tournament ? "Modifica los datos del torneo" : "Ingresa la información del nuevo torneo de fútbol"}
+            {tournament ? "Modifica los datos del torneo" : "Ingresa la informacion del nuevo torneo de futbol"}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit}>
@@ -83,10 +93,11 @@ export function TournamentDialog({ tournament, open, onOpenChange, onSave, userI
               <Label htmlFor="name">Nombre del Torneo</Label>
               <Input
                 id="name"
-                value={formData.name}
+                value={formData.name || ""}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                placeholder="Liga Amateur Orizaba 2025"
+                placeholder="Liga Amateur Orizaba 2026"
                 required
+                disabled={isSaving}
               />
             </div>
 
@@ -100,9 +111,9 @@ export function TournamentDialog({ tournament, open, onOpenChange, onSave, userI
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="5">Fútbol 5</SelectItem>
-                  <SelectItem value="7">Fútbol 7</SelectItem>
-                  <SelectItem value="11">Fútbol 11</SelectItem>
+                  <SelectItem value="5">Futbol 5</SelectItem>
+                  <SelectItem value="7">Futbol 7</SelectItem>
+                  <SelectItem value="11">Futbol 11</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -113,9 +124,10 @@ export function TournamentDialog({ tournament, open, onOpenChange, onSave, userI
                 <Input
                   id="startDate"
                   type="date"
-                  value={formData.startDate}
+                  value={formData.startDate || ""}
                   onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
                   required
+                  disabled={isSaving}
                 />
               </div>
               <div className="space-y-2">
@@ -123,9 +135,10 @@ export function TournamentDialog({ tournament, open, onOpenChange, onSave, userI
                 <Input
                   id="endDate"
                   type="date"
-                  value={formData.endDate}
+                  value={formData.endDate || ""}
                   onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
                   required
+                  disabled={isSaving}
                 />
               </div>
             </div>
@@ -140,7 +153,7 @@ export function TournamentDialog({ tournament, open, onOpenChange, onSave, userI
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="upcoming">Próximo</SelectItem>
+                  <SelectItem value="upcoming">Proximo</SelectItem>
                   <SelectItem value="active">En curso</SelectItem>
                   <SelectItem value="completed">Finalizado</SelectItem>
                 </SelectContent>
@@ -151,18 +164,21 @@ export function TournamentDialog({ tournament, open, onOpenChange, onSave, userI
               <Label htmlFor="rules">Reglas (opcional)</Label>
               <Textarea
                 id="rules"
-                value={formData.rules}
+                value={formData.rules || ""}
                 onChange={(e) => setFormData({ ...formData, rules: e.target.value })}
                 placeholder="Describe las reglas especiales del torneo..."
                 rows={3}
+                disabled={isSaving}
               />
             </div>
           </div>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSaving}>
               Cancelar
             </Button>
-            <Button type="submit">{tournament ? "Guardar Cambios" : "Crear Torneo"}</Button>
+            <Button type="submit" disabled={isSaving}>
+              {isSaving ? "Guardando..." : tournament ? "Guardar Cambios" : "Crear Torneo"}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>

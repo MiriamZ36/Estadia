@@ -1,13 +1,13 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useEffect, useState } from "react"
+import { ArrowLeft, Plus, Trophy, Users } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
-import { saveTournament, getTeams } from "@/lib/storage"
-import type { Tournament, Team } from "@/lib/types"
+import { useToast } from "@/hooks/use-toast"
+import type { Team, Tournament } from "@/lib/types"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { ArrowLeft, Plus, Users, Trophy } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { AddTeamsDialog } from "./add-teams-dialog"
 import { TournamentFixtures } from "./tournament-fixtures"
@@ -19,48 +19,76 @@ interface TournamentDetailProps {
 
 export function TournamentDetail({ tournament, onBack }: TournamentDetailProps) {
   const { user } = useAuth()
+  const { toast } = useToast()
   const [teams, setTeams] = useState<Team[]>([])
   const [allTeams, setAllTeams] = useState<Team[]>([])
   const [isAddTeamsOpen, setIsAddTeamsOpen] = useState(false)
-  const [currentTournament, setCurrentTournament] = useState<Tournament>(tournament)
+  const [currentTournament] = useState<Tournament>(tournament)
 
   useEffect(() => {
-    loadData()
+    void loadData()
   }, [tournament.id])
 
-  const loadData = () => {
-    const allTeamsData = getTeams()
-    setAllTeams(allTeamsData)
+  const loadData = async () => {
+    const response = await fetch("/api/teams", {
+      cache: "no-store",
+    })
+    const result = await response.json()
 
-    const tournamentTeams = allTeamsData.filter((team) => currentTournament.teamIds?.includes(team.id))
-    setTeams(tournamentTeams)
+    if (!response.ok) {
+      toast({
+        variant: "destructive",
+        title: "No fue posible cargar equipos",
+        description: result.error || "La informacion del torneo no pudo cargarse.",
+      })
+      return
+    }
+
+    const teamsData = result.teams || []
+    setAllTeams(teamsData)
+    setTeams(teamsData.filter((team: Team) => team.tournamentId === currentTournament.id))
   }
 
-  const handleAddTeams = (selectedTeamIds: string[]) => {
-    const updatedTournament: Tournament = {
-      ...currentTournament,
-      teamIds: [...new Set([...(currentTournament.teamIds || []), ...selectedTeamIds])],
+  const handleAddTeams = async (selectedTeamIds: string[]) => {
+    const selectedTeams = allTeams.filter((team) => selectedTeamIds.includes(team.id))
+
+    const responses = await Promise.all(
+      selectedTeams.map((team) =>
+        fetch(`/api/teams/${team.id}`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            ...team,
+            tournamentId: currentTournament.id,
+          }),
+        }),
+      ),
+    )
+
+    const hasError = responses.some((response) => !response.ok)
+
+    if (hasError) {
+      toast({
+        variant: "destructive",
+        title: "No fue posible agregar todos los equipos",
+        description: "Algunos equipos no pudieron asignarse al torneo.",
+      })
+      return
     }
-    saveTournament(updatedTournament)
-    setCurrentTournament(updatedTournament)
+
     setIsAddTeamsOpen(false)
-    loadData()
-  }
+    await loadData()
 
-  const handleRemoveTeam = (teamId: string) => {
-    if (confirm("¿Deseas remover este equipo del torneo?")) {
-      const updatedTournament: Tournament = {
-        ...currentTournament,
-        teamIds: currentTournament.teamIds?.filter((id) => id !== teamId) || [],
-      }
-      saveTournament(updatedTournament)
-      setCurrentTournament(updatedTournament)
-      loadData()
-    }
+    toast({
+      title: "Equipos agregados",
+      description: "Los equipos seleccionados fueron asignados al torneo.",
+    })
   }
 
   const canManage = user?.role === "admin"
-  const availableTeams = allTeams.filter((team) => !currentTournament.teamIds?.includes(team.id))
+  const availableTeams = allTeams.filter((team) => team.tournamentId !== currentTournament.id)
 
   return (
     <div className="space-y-6">
@@ -71,7 +99,7 @@ export function TournamentDetail({ tournament, onBack }: TournamentDetailProps) 
         <div className="flex-1">
           <h2 className="text-3xl font-bold">{currentTournament.name}</h2>
           <p className="text-muted-foreground">
-            Fútbol {currentTournament.format} • {new Date(currentTournament.startDate).toLocaleDateString("es-MX")} -{" "}
+            Futbol {currentTournament.format} • {new Date(currentTournament.startDate).toLocaleDateString("es-MX")} -{" "}
             {new Date(currentTournament.endDate).toLocaleDateString("es-MX")}
           </p>
         </div>
@@ -79,7 +107,7 @@ export function TournamentDetail({ tournament, onBack }: TournamentDetailProps) 
           {currentTournament.status === "active"
             ? "En curso"
             : currentTournament.status === "upcoming"
-              ? "Próximo"
+              ? "Proximo"
               : "Finalizado"}
         </Badge>
       </div>
@@ -87,24 +115,24 @@ export function TournamentDetail({ tournament, onBack }: TournamentDetailProps) 
       <Tabs defaultValue="teams" className="space-y-4">
         <TabsList>
           <TabsTrigger value="teams">
-            <Users className="h-4 w-4 mr-2" />
+            <Users className="mr-2 h-4 w-4" />
             Equipos Participantes
           </TabsTrigger>
           <TabsTrigger value="fixtures">
-            <Trophy className="h-4 w-4 mr-2" />
+            <Trophy className="mr-2 h-4 w-4" />
             Encuentros
           </TabsTrigger>
         </TabsList>
 
         <TabsContent value="teams" className="space-y-4">
-          <div className="flex justify-between items-center">
+          <div className="flex items-center justify-between">
             <div>
               <h3 className="text-lg font-semibold">Equipos ({teams.length})</h3>
               <p className="text-sm text-muted-foreground">Gestiona los equipos que participan en este torneo</p>
             </div>
             {canManage && (
               <Button onClick={() => setIsAddTeamsOpen(true)} disabled={availableTeams.length === 0}>
-                <Plus className="h-4 w-4 mr-2" />
+                <Plus className="mr-2 h-4 w-4" />
                 Agregar Equipos
               </Button>
             )}
@@ -113,12 +141,12 @@ export function TournamentDetail({ tournament, onBack }: TournamentDetailProps) 
           {teams.length === 0 ? (
             <Card>
               <CardContent className="flex flex-col items-center justify-center py-12">
-                <Users className="h-12 w-12 text-muted-foreground mb-4" />
-                <p className="text-lg font-medium mb-2">No hay equipos registrados</p>
-                <p className="text-sm text-muted-foreground mb-4">Agrega equipos para comenzar el torneo</p>
+                <Users className="mb-4 h-12 w-12 text-muted-foreground" />
+                <p className="mb-2 text-lg font-medium">No hay equipos registrados</p>
+                <p className="mb-4 text-sm text-muted-foreground">Agrega equipos para comenzar el torneo</p>
                 {canManage && availableTeams.length > 0 && (
                   <Button onClick={() => setIsAddTeamsOpen(true)}>
-                    <Plus className="h-4 w-4 mr-2" />
+                    <Plus className="mr-2 h-4 w-4" />
                     Agregar Equipos
                   </Button>
                 )}
@@ -127,14 +155,14 @@ export function TournamentDetail({ tournament, onBack }: TournamentDetailProps) 
           ) : (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {teams.map((team) => (
-                <Card key={team.id} className="hover:shadow-md transition-shadow">
+                <Card key={team.id} className="transition-shadow hover:shadow-md">
                   <CardHeader className="flex flex-row items-center gap-4">
-                    <div className="w-16 h-16 rounded-full bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center text-primary-foreground">
+                    <div className="flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-primary to-primary/60 text-primary-foreground">
                       {team.logo ? (
                         <img
                           src={team.logo || "/placeholder.svg"}
                           alt={team.name}
-                          className="w-full h-full object-cover rounded-full"
+                          className="h-full w-full rounded-full object-cover"
                         />
                       ) : (
                         <Trophy className="h-8 w-8" />
@@ -147,13 +175,6 @@ export function TournamentDetail({ tournament, onBack }: TournamentDetailProps) 
                       )}
                     </div>
                   </CardHeader>
-                  {canManage && (
-                    <CardContent>
-                      <Button variant="outline" size="sm" onClick={() => handleRemoveTeam(team.id)} className="w-full">
-                        Remover del Torneo
-                      </Button>
-                    </CardContent>
-                  )}
                 </Card>
               ))}
             </div>
