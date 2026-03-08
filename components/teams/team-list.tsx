@@ -236,8 +236,8 @@ export function TeamList() {
           <h2 className="text-3xl font-bold">Equipos y Jugadores</h2>
           <p className="text-muted-foreground">Gestiona los equipos y sus plantillas</p>
         </div>
-        {canManage && selectedTournament && (
-          <Button onClick={handleCreate}>
+        {canManage && (
+          <Button onClick={handleCreate} disabled={!selectedTournament}>
             <Plus className="mr-2 h-4 w-4" />
             Nuevo Equipo
           </Button>

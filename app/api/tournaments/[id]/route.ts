@@ -14,11 +14,7 @@ function formatTournamentError(message: string) {
     return "Alguno de los valores del torneo no cumple las reglas definidas."
   }
 
-  if (normalizedMessage.includes("violates foreign key constraint")) {
-    return "El organizador del torneo no es valido."
-  }
-
-  return "No fue posible guardar el torneo."
+  return "No fue posible actualizar el torneo."
 }
 
 async function getSessionProfile() {
@@ -67,27 +63,7 @@ function mapTournament(row: {
   }
 }
 
-export async function GET() {
-  const guard = await getSessionProfile()
-
-  if ("error" in guard) {
-    return NextResponse.json({ error: guard.error }, { status: guard.status })
-  }
-
-  const admin = createSupabaseAdminClient()
-  const { data, error } = await admin
-    .from("tournaments")
-    .select("id, name, format, start_date, end_date, status, organizer_id, rules")
-    .order("start_date", { ascending: false })
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
-  }
-
-  return NextResponse.json({ tournaments: data.map(mapTournament) })
-}
-
-export async function POST(request: Request) {
+export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
   const guard = await getSessionProfile()
 
   if ("error" in guard) {
@@ -95,19 +71,16 @@ export async function POST(request: Request) {
   }
 
   if (!canManageTournaments(guard.role)) {
-    return NextResponse.json({ error: "No tienes permisos para crear torneos." }, { status: 403 })
+    return NextResponse.json({ error: "No tienes permisos para editar torneos." }, { status: 403 })
   }
 
+  const { id } = await context.params
   const body = await request.json()
-
-  if (!body.name || !body.format || !body.startDate || !body.endDate || !body.status) {
-    return NextResponse.json({ error: "Faltan campos obligatorios del torneo." }, { status: 400 })
-  }
-
   const admin = createSupabaseAdminClient()
+
   const { data, error } = await admin
     .from("tournaments")
-    .insert({
+    .update({
       name: body.name,
       format: body.format,
       start_date: body.startDate,
@@ -116,6 +89,7 @@ export async function POST(request: Request) {
       organizer_id: body.organizerId || guard.userId,
       rules: body.rules || null,
     })
+    .eq("id", id)
     .select("id, name, format, start_date, end_date, status, organizer_id, rules")
     .single()
 
@@ -124,4 +98,26 @@ export async function POST(request: Request) {
   }
 
   return NextResponse.json({ tournament: mapTournament(data) })
+}
+
+export async function DELETE(_request: Request, context: { params: Promise<{ id: string }> }) {
+  const guard = await getSessionProfile()
+
+  if ("error" in guard) {
+    return NextResponse.json({ error: guard.error }, { status: guard.status })
+  }
+
+  if (!canManageTournaments(guard.role)) {
+    return NextResponse.json({ error: "No tienes permisos para eliminar torneos." }, { status: 403 })
+  }
+
+  const { id } = await context.params
+  const admin = createSupabaseAdminClient()
+  const { error } = await admin.from("tournaments").delete().eq("id", id)
+
+  if (error) {
+    return NextResponse.json({ error: "No fue posible eliminar el torneo." }, { status: 500 })
+  }
+
+  return NextResponse.json({ success: true })
 }

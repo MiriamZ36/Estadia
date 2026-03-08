@@ -1,84 +1,156 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useEffect, useState } from "react"
+import { Calendar, Pencil, Plus, Trash2, Trophy } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
 import { useToast } from "@/hooks/use-toast"
-import { useLoading } from "@/lib/loading-context"
-import { getTournaments, saveTournament, deleteTournament } from "@/lib/storage"
-import type { Tournament } from "@/lib/types"
+import type { Team, Tournament } from "@/lib/types"
+import { TournamentDialog } from "./tournament-dialog"
+import { TournamentDetail } from "./tournament-detail"
+import { ProgressDialog } from "@/components/ui/progress-dialog"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Plus, Pencil, Trash2, Calendar, Trophy } from "lucide-react"
-import { TournamentDialog } from "./tournament-dialog"
-import { TournamentDetail } from "./tournament-detail"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+
+type ProgressState = {
+  open: boolean
+  title: string
+  description: string
+}
+
+const idleProgress: ProgressState = {
+  open: false,
+  title: "",
+  description: "",
+}
 
 export function TournamentList() {
   const { user } = useAuth()
   const { toast } = useToast()
-  const { startLoading, stopLoading } = useLoading()
   const [tournaments, setTournaments] = useState<Tournament[]>([])
+  const [teams, setTeams] = useState<Team[]>([])
   const [selectedTournament, setSelectedTournament] = useState<Tournament | null>(null)
   const [viewingTournament, setViewingTournament] = useState<Tournament | null>(null)
+  const [tournamentToDelete, setTournamentToDelete] = useState<Tournament | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const [progressState, setProgressState] = useState<ProgressState>(idleProgress)
 
   useEffect(() => {
-    loadTournaments()
+    void loadData()
   }, [])
 
-  const loadTournaments = () => {
-    const data = getTournaments()
-    setTournaments(data)
+  const openProgress = (title: string, description: string) => {
+    setProgressState({
+      open: true,
+      title,
+      description,
+    })
   }
 
-  const handleSave = (tournament: Tournament) => {
-    try {
-      startLoading(tournament.id ? "Actualizando torneo..." : "Creando torneo...")
-      saveTournament(tournament)
-      loadTournaments()
-      setIsDialogOpen(false)
-      setSelectedTournament(null)
+  const closeProgress = () => {
+    setProgressState(idleProgress)
+  }
+
+  const loadData = async () => {
+    const [tournamentsResponse, teamsResponse] = await Promise.all([
+      fetch("/api/tournaments", { cache: "no-store" }),
+      fetch("/api/teams", { cache: "no-store" }),
+    ])
+    const tournamentsResult = await tournamentsResponse.json()
+    const teamsResult = await teamsResponse.json()
+
+    if (!tournamentsResponse.ok || !teamsResponse.ok) {
       toast({
-        title: tournament.id ? "Torneo actualizado" : "Torneo creado",
-        description: `${tournament.name} ha sido ${tournament.id ? "actualizado" : "creado"} exitosamente.`,
-      })
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Ocurrió un error al guardar el torneo.",
         variant: "destructive",
+        title: "No fue posible cargar torneos",
+        description: tournamentsResult.error || teamsResult.error || "Verifica la conexion con la base de datos.",
       })
-    } finally {
-      stopLoading()
+      return
     }
+
+    setTournaments(tournamentsResult.tournaments || [])
+    setTeams(teamsResult.teams || [])
+  }
+
+  const handleSave = async (tournament: Tournament) => {
+    const isEditing = Boolean(tournament.id)
+    setIsSaving(true)
+    openProgress(
+      isEditing ? "Actualizando torneo" : "Creando torneo",
+      isEditing ? "Guardando cambios del torneo en la base de datos." : "Registrando el nuevo torneo en la base de datos.",
+    )
+
+    const response = await fetch(isEditing ? `/api/tournaments/${tournament.id}` : "/api/tournaments", {
+      method: isEditing ? "PATCH" : "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(tournament),
+    })
+    const result = await response.json()
+    closeProgress()
+    setIsSaving(false)
+
+    if (!response.ok) {
+      toast({
+        variant: "destructive",
+        title: "No fue posible guardar el torneo",
+        description: result.error || "La operacion no pudo completarse.",
+      })
+      return
+    }
+
+    await loadData()
+    setIsDialogOpen(false)
+    setSelectedTournament(null)
+
+    toast({
+      title: isEditing ? "Torneo actualizado" : "Torneo creado",
+      description: `${result.tournament.name} fue ${isEditing ? "actualizado" : "registrado"} correctamente.`,
+    })
+  }
+
+  const handleDelete = async () => {
+    if (!tournamentToDelete) return
+
+    openProgress("Eliminando torneo", "Estamos eliminando el torneo y su informacion relacionada.")
+
+    const response = await fetch(`/api/tournaments/${tournamentToDelete.id}`, {
+      method: "DELETE",
+    })
+    const result = await response.json()
+    closeProgress()
+
+    if (!response.ok) {
+      toast({
+        variant: "destructive",
+        title: "No fue posible eliminar el torneo",
+        description: result.error || "La eliminacion no pudo completarse.",
+      })
+      return
+    }
+
+    const deletedTournamentName = tournamentToDelete.name
+    setTournamentToDelete(null)
+    await loadData()
+
+    toast({
+      title: "Torneo eliminado",
+      description: `${deletedTournamentName} fue eliminado correctamente.`,
+    })
   }
 
   const handleEdit = (tournament: Tournament) => {
     setSelectedTournament(tournament)
     setIsDialogOpen(true)
-  }
-
-  const handleDelete = (id: string) => {
-    const tournament = tournaments.find((t) => t.id === id)
-    if (confirm("¿Estás seguro de eliminar este torneo?")) {
-      try {
-        startLoading("Eliminando torneo...")
-        deleteTournament(id)
-        loadTournaments()
-        toast({
-          title: "Torneo eliminado",
-          description: `${tournament?.name || "El torneo"} ha sido eliminado exitosamente.`,
-        })
-      } catch (error) {
-        toast({
-          title: "Error",
-          description: "Ocurrió un error al eliminar el torneo.",
-          variant: "destructive",
-        })
-      } finally {
-        stopLoading()
-      }
-    }
   }
 
   const handleCreate = () => {
@@ -90,9 +162,9 @@ export function TournamentList() {
     setViewingTournament(tournament)
   }
 
-  const handleBackToList = () => {
+  const handleBackToList = async () => {
     setViewingTournament(null)
-    loadTournaments()
+    await loadData()
   }
 
   const getStatusBadge = (status: Tournament["status"]) => {
@@ -103,7 +175,7 @@ export function TournamentList() {
     } as const
 
     const labels = {
-      upcoming: "Próximo",
+      upcoming: "Proximo",
       active: "En curso",
       completed: "Finalizado",
     }
@@ -111,22 +183,26 @@ export function TournamentList() {
     return <Badge variant={variants[status] || "secondary"}>{labels[status]}</Badge>
   }
 
+  const getTeamCount = (tournamentId: string) => {
+    return teams.filter((team) => team.tournamentId === tournamentId).length
+  }
+
   const canManage = user?.role === "admin"
 
   if (viewingTournament) {
-    return <TournamentDetail tournament={viewingTournament} onBack={handleBackToList} />
+    return <TournamentDetail tournament={viewingTournament} onBack={() => void handleBackToList()} />
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex items-center justify-between">
         <div>
           <h2 className="text-3xl font-bold">Torneos</h2>
-          <p className="text-muted-foreground">Gestiona y visualiza los torneos de fútbol</p>
+          <p className="text-muted-foreground">Gestiona y visualiza los torneos de futbol</p>
         </div>
         {canManage && (
           <Button onClick={handleCreate}>
-            <Plus className="h-4 w-4 mr-2" />
+            <Plus className="mr-2 h-4 w-4" />
             Nuevo Torneo
           </Button>
         )}
@@ -135,12 +211,12 @@ export function TournamentList() {
       {tournaments.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
-            <Calendar className="h-12 w-12 text-muted-foreground mb-4" />
-            <p className="text-lg font-medium mb-2">No hay torneos registrados</p>
-            <p className="text-sm text-muted-foreground mb-4">Comienza creando tu primer torneo</p>
+            <Calendar className="mb-4 h-12 w-12 text-muted-foreground" />
+            <p className="mb-2 text-lg font-medium">No hay torneos registrados</p>
+            <p className="mb-4 text-sm text-muted-foreground">Comienza creando tu primer torneo</p>
             {canManage && (
               <Button onClick={handleCreate}>
-                <Plus className="h-4 w-4 mr-2" />
+                <Plus className="mr-2 h-4 w-4" />
                 Crear Torneo
               </Button>
             )}
@@ -149,12 +225,12 @@ export function TournamentList() {
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {tournaments.map((tournament) => (
-            <Card key={tournament.id} className="hover:shadow-lg transition-shadow">
+            <Card key={tournament.id} className="transition-shadow hover:shadow-lg">
               <CardHeader>
-                <div className="flex justify-between items-start">
+                <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <CardTitle className="text-xl">{tournament.name}</CardTitle>
-                    <CardDescription className="mt-2">Formato: Fútbol {tournament.format}</CardDescription>
+                    <CardDescription className="mt-2">Formato: Futbol {tournament.format}</CardDescription>
                   </div>
                   {getStatusBadge(tournament.status)}
                 </div>
@@ -162,21 +238,21 @@ export function TournamentList() {
               <CardContent>
                 <div className="space-y-2 text-sm">
                   <div className="flex items-center text-muted-foreground">
-                    <Calendar className="h-4 w-4 mr-2" />
+                    <Calendar className="mr-2 h-4 w-4" />
                     <span>
                       {new Date(tournament.startDate).toLocaleDateString("es-MX")} -{" "}
                       {new Date(tournament.endDate).toLocaleDateString("es-MX")}
                     </span>
                   </div>
                   <div className="flex items-center text-muted-foreground">
-                    <Trophy className="h-4 w-4 mr-2" />
-                    <span>{tournament.teamIds?.length || 0} equipos participantes</span>
+                    <Trophy className="mr-2 h-4 w-4" />
+                    <span>{getTeamCount(tournament.id)} equipos participantes</span>
                   </div>
-                  {tournament.rules && <p className="text-muted-foreground line-clamp-2">{tournament.rules}</p>}
+                  {tournament.rules && <p className="line-clamp-2 text-muted-foreground">{tournament.rules}</p>}
                 </div>
-                <div className="flex gap-2 mt-4">
+                <div className="mt-4 flex gap-2">
                   <Button variant="outline" size="sm" onClick={() => handleView(tournament)} className="flex-1">
-                    <Trophy className="h-4 w-4 mr-2" />
+                    <Trophy className="mr-2 h-4 w-4" />
                     Ver Detalles
                   </Button>
                   {canManage && (
@@ -184,7 +260,7 @@ export function TournamentList() {
                       <Button variant="outline" size="sm" onClick={() => handleEdit(tournament)}>
                         <Pencil className="h-4 w-4" />
                       </Button>
-                      <Button variant="destructive" size="sm" onClick={() => handleDelete(tournament.id)}>
+                      <Button variant="destructive" size="sm" onClick={() => setTournamentToDelete(tournament)}>
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </>
@@ -202,7 +278,31 @@ export function TournamentList() {
         onOpenChange={setIsDialogOpen}
         onSave={handleSave}
         userId={user?.id || ""}
+        isSaving={isSaving}
       />
+
+      <Dialog open={Boolean(tournamentToDelete)} onOpenChange={(open) => !open && setTournamentToDelete(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Eliminar torneo</DialogTitle>
+            <DialogDescription>
+              {tournamentToDelete
+                ? `Se eliminara ${tournamentToDelete.name} y todos sus datos asociados. Esta accion no se puede deshacer.`
+                : "Confirma la eliminacion del torneo."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-2">
+            <Button variant="destructive" onClick={() => void handleDelete()} className="flex-1">
+              Eliminar
+            </Button>
+            <Button variant="outline" onClick={() => setTournamentToDelete(null)}>
+              Cancelar
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <ProgressDialog open={progressState.open} title={progressState.title} description={progressState.description} />
     </div>
   )
 }
