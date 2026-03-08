@@ -47,7 +47,7 @@ async function getSessionProfile() {
 function mapTeam(row: {
   id: string
   name: string
-  tournament_id: string
+  tournament_id: string | null
   logo_url: string | null
   founded_date: string | null
   coach_id: string | null
@@ -55,7 +55,7 @@ function mapTeam(row: {
   return {
     id: row.id,
     name: row.name,
-    tournamentId: row.tournament_id,
+    tournamentId: row.tournament_id || "",
     logo: row.logo_url || undefined,
     foundedDate: row.founded_date || undefined,
     coachId: row.coach_id || undefined,

@@ -11,6 +11,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   Dialog,
   DialogContent,
@@ -19,10 +20,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import type { Tournament } from "@/lib/types"
 
 interface TeamDialogProps {
   team: Team | null
   tournamentId: string
+  tournaments: Tournament[]
   open: boolean
   onOpenChange: (open: boolean) => void
   onSave: (team: Team) => Promise<void>
@@ -34,7 +37,15 @@ function getFileExtension(filename: string) {
   return segments.length > 1 ? segments.pop() : "jpg"
 }
 
-export function TeamDialog({ team, tournamentId, open, onOpenChange, onSave, isSaving = false }: TeamDialogProps) {
+export function TeamDialog({
+  team,
+  tournamentId,
+  tournaments,
+  open,
+  onOpenChange,
+  onSave,
+  isSaving = false,
+}: TeamDialogProps) {
   const { toast } = useToast()
   const supabase = createSupabaseBrowserClient()
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -42,6 +53,7 @@ export function TeamDialog({ team, tournamentId, open, onOpenChange, onSave, isS
   const [formData, setFormData] = useState<Partial<Team>>({
     name: "",
     logo: "",
+    tournamentId: "",
   })
 
   useEffect(() => {
@@ -53,8 +65,9 @@ export function TeamDialog({ team, tournamentId, open, onOpenChange, onSave, isS
     setFormData({
       name: "",
       logo: "",
+      tournamentId: tournamentId || "",
     })
-  }, [team, open])
+  }, [team, open, tournamentId])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -62,7 +75,7 @@ export function TeamDialog({ team, tournamentId, open, onOpenChange, onSave, isS
     const teamData: Team = {
       id: team?.id || "",
       name: formData.name || "",
-      tournamentId: team?.tournamentId || tournamentId,
+      tournamentId: formData.tournamentId || "",
       logo: formData.logo,
       foundedDate: team?.foundedDate || new Date().toISOString().slice(0, 10),
     }
@@ -152,6 +165,31 @@ export function TeamDialog({ team, tournamentId, open, onOpenChange, onSave, isS
                 required
                 disabled={isSaving || isUploading}
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="team-tournament">Torneo (opcional)</Label>
+              <Select
+                value={formData.tournamentId || "__none__"}
+                onValueChange={(value) =>
+                  setFormData({
+                    ...formData,
+                    tournamentId: value === "__none__" ? "" : value,
+                  })
+                }
+              >
+                <SelectTrigger id="team-tournament" disabled={isSaving || isUploading}>
+                  <SelectValue placeholder="Sin torneo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">Sin torneo</SelectItem>
+                  {tournaments.map((tournament) => (
+                    <SelectItem key={tournament.id} value={tournament.id}>
+                      {tournament.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="space-y-2">

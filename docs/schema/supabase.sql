@@ -57,7 +57,7 @@ create table if not exists public.tournaments (
 -- Teams
 create table if not exists public.teams (
   id uuid primary key default gen_random_uuid(),
-  tournament_id uuid not null references public.tournaments(id) on delete cascade,
+  tournament_id uuid references public.tournaments(id) on delete set null,
   name text not null,
   logo_url text,
   founded_date date,

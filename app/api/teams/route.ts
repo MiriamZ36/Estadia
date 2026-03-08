@@ -47,7 +47,7 @@ async function getSessionProfile() {
 function mapTeam(row: {
   id: string
   name: string
-  tournament_id: string
+  tournament_id: string | null
   logo_url: string | null
   founded_date: string | null
   coach_id: string | null
@@ -55,7 +55,7 @@ function mapTeam(row: {
   return {
     id: row.id,
     name: row.name,
-    tournamentId: row.tournament_id,
+    tournamentId: row.tournament_id || "",
     logo: row.logo_url || undefined,
     foundedDate: row.founded_date || undefined,
     coachId: row.coach_id || undefined,
@@ -104,7 +104,7 @@ export async function POST(request: Request) {
 
   const body = await request.json()
 
-  if (!body.name || !body.tournamentId) {
+  if (!body.name) {
     return NextResponse.json({ error: "Faltan campos obligatorios del equipo." }, { status: 400 })
   }
 
@@ -113,7 +113,7 @@ export async function POST(request: Request) {
     .from("teams")
     .insert({
       name: body.name,
-      tournament_id: body.tournamentId,
+      tournament_id: body.tournamentId || null,
       logo_url: body.logo || null,
       founded_date: body.foundedDate || null,
       coach_id: body.coachId || null,

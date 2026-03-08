@@ -54,7 +54,8 @@ export function TeamList() {
       void loadTeams(selectedTournament)
       void loadPlayerCounts()
     } else {
-      setTeams([])
+      void loadTeams()
+      void loadPlayerCounts()
     }
   }, [selectedTournament])
 
@@ -93,8 +94,9 @@ export function TeamList() {
     }
   }
 
-  const loadTeams = async (tournamentId: string) => {
-    const response = await fetch(`/api/teams?tournamentId=${tournamentId}`, {
+  const loadTeams = async (tournamentId?: string) => {
+    const endpoint = tournamentId ? `/api/teams?tournamentId=${tournamentId}` : "/api/teams"
+    const response = await fetch(endpoint, {
       cache: "no-store",
     })
     const result = await response.json()
@@ -158,9 +160,7 @@ export function TeamList() {
       return
     }
 
-    if (selectedTournament) {
-      await loadTeams(selectedTournament)
-    }
+    await loadTeams(selectedTournament || undefined)
     await loadPlayerCounts()
 
     setIsDialogOpen(false)
@@ -195,9 +195,7 @@ export function TeamList() {
     const deletedTeamName = teamToDelete.name
     setTeamToDelete(null)
 
-    if (selectedTournament) {
-      await loadTeams(selectedTournament)
-    }
+    await loadTeams(selectedTournament || undefined)
     await loadPlayerCounts()
 
     toast({
@@ -237,7 +235,7 @@ export function TeamList() {
           <p className="text-muted-foreground">Gestiona los equipos y sus plantillas</p>
         </div>
         {canManage && (
-          <Button onClick={handleCreate} disabled={!selectedTournament}>
+          <Button onClick={handleCreate}>
             <Plus className="mr-2 h-4 w-4" />
             Nuevo Equipo
           </Button>
@@ -261,7 +259,7 @@ export function TeamList() {
         </div>
       </div>
 
-      {!selectedTournament ? (
+      {!selectedTournament && tournaments.length > 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
             <UsersIcon className="mb-4 h-12 w-12 text-muted-foreground" />
@@ -323,6 +321,7 @@ export function TeamList() {
       <TeamDialog
         team={selectedTeam}
         tournamentId={selectedTournament}
+        tournaments={tournaments}
         open={isDialogOpen}
         onOpenChange={setIsDialogOpen}
         onSave={handleSave}
