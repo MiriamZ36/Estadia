@@ -50,6 +50,8 @@ export function TeamDialog({
   const supabase = createSupabaseBrowserClient()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [isUploading, setIsUploading] = useState(false)
+  const [selectedLogoFile, setSelectedLogoFile] = useState<File | null>(null)
+  const [logoPreviewUrl, setLogoPreviewUrl] = useState("")
   const [formData, setFormData] = useState<Partial<Team>>({
     name: "",
     logo: "",
@@ -59,31 +61,83 @@ export function TeamDialog({
   useEffect(() => {
     if (team) {
       setFormData(team)
-      return
+    } else {
+      setFormData({
+        name: "",
+        logo: "",
+        tournamentId: tournamentId || "",
+      })
     }
 
-    setFormData({
-      name: "",
-      logo: "",
-      tournamentId: tournamentId || "",
-    })
+    setSelectedLogoFile(null)
+    setLogoPreviewUrl("")
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ""
+    }
   }, [team, open, tournamentId])
+
+  useEffect(() => {
+    return () => {
+      if (logoPreviewUrl.startsWith("blob:")) {
+        URL.revokeObjectURL(logoPreviewUrl)
+      }
+    }
+  }, [logoPreviewUrl])
+
+  const uploadSelectedLogo = async () => {
+    if (!selectedLogoFile) {
+      return formData.logo || ""
+    }
+
+    setIsUploading(true)
+    const extension = getFileExtension(selectedLogoFile.name)
+    const path = `equipos/${Date.now()}-${Math.random().toString(36).slice(2)}.${extension}`
+
+    const { error } = await supabase.storage.from("fotos").upload(path, selectedLogoFile, {
+      upsert: false,
+      contentType: selectedLogoFile.type,
+    })
+
+    if (error) {
+      throw new Error(error.message)
+    }
+
+    const {
+      data: { publicUrl },
+    } = supabase.storage.from("fotos").getPublicUrl(path)
+
+    return publicUrl
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    const teamData: Team = {
-      id: team?.id || "",
-      name: formData.name || "",
-      tournamentId: formData.tournamentId || "",
-      logo: formData.logo,
-      foundedDate: team?.foundedDate || new Date().toISOString().slice(0, 10),
-    }
+    try {
+      const logoUrl = await uploadSelectedLogo()
 
-    await onSave(teamData)
+      const teamData: Team = {
+        id: team?.id || "",
+        name: formData.name || "",
+        tournamentId: formData.tournamentId || "",
+        logo: logoUrl || undefined,
+        foundedDate: team?.foundedDate || new Date().toISOString().slice(0, 10),
+      }
+
+      await onSave(teamData)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "No fue posible procesar el logo del equipo."
+      toast({
+        variant: "destructive",
+        title: "Error al subir imagen",
+        description: `${message} Verifica permisos del bucket fotos y politicas de Storage.`,
+      })
+    } finally {
+      setIsUploading(false)
+    }
   }
 
-  const handleUploadLogo = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleUploadLogo = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
 
     if (!file) {
@@ -99,42 +153,31 @@ export function TeamDialog({
       return
     }
 
-    setIsUploading(true)
-    const extension = getFileExtension(file.name)
-    const path = `equipos/${Date.now()}-${Math.random().toString(36).slice(2)}.${extension}`
-
-    const { error } = await supabase.storage.from("fotos").upload(path, file, {
-      upsert: false,
-      contentType: file.type,
-    })
-
-    if (error) {
-      setIsUploading(false)
-      toast({
-        variant: "destructive",
-        title: "Error al subir imagen",
-        description: error.message,
-      })
-      return
+    if (logoPreviewUrl.startsWith("blob:")) {
+      URL.revokeObjectURL(logoPreviewUrl)
     }
 
-    const {
-      data: { publicUrl },
-    } = supabase.storage.from("fotos").getPublicUrl(path)
-
+    const previewUrl = URL.createObjectURL(file)
+    setSelectedLogoFile(file)
+    setLogoPreviewUrl(previewUrl)
     setFormData((previous) => ({
       ...previous,
-      logo: publicUrl,
+      logo: previous.logo || "",
     }))
-    setIsUploading(false)
 
     toast({
-      title: "Logo cargado",
-      description: "La imagen se subio correctamente al bucket fotos.",
+      title: "Vista previa lista",
+      description: "El logo se subira al guardar el equipo.",
     })
   }
 
   const handleRemoveLogo = () => {
+    if (logoPreviewUrl.startsWith("blob:")) {
+      URL.revokeObjectURL(logoPreviewUrl)
+    }
+
+    setSelectedLogoFile(null)
+    setLogoPreviewUrl("")
     setFormData((previous) => ({
       ...previous,
       logo: "",
@@ -196,7 +239,7 @@ export function TeamDialog({
               <Label>Logo del equipo</Label>
               <div className="flex items-center gap-4">
                 <Avatar className="h-16 w-16">
-                  <AvatarImage src={formData.logo || "/placeholder.svg"} alt={formData.name || "Equipo"} />
+                  <AvatarImage src={logoPreviewUrl || formData.logo || "/placeholder.svg"} alt={formData.name || "Equipo"} />
                   <AvatarFallback>
                     <ImagePlus className="h-5 w-5" />
                   </AvatarFallback>
@@ -208,7 +251,7 @@ export function TeamDialog({
                     type="file"
                     accept="image/*"
                     className="hidden"
-                    onChange={(event) => void handleUploadLogo(event)}
+                    onChange={handleUploadLogo}
                     disabled={isSaving || isUploading}
                   />
                   <div className="flex gap-2">
@@ -220,9 +263,9 @@ export function TeamDialog({
                       onClick={() => fileInputRef.current?.click()}
                     >
                       <Upload className="mr-2 h-4 w-4" />
-                      {isUploading ? "Subiendo..." : formData.logo ? "Cambiar logo" : "Subir logo"}
+                      {isUploading ? "Subiendo..." : selectedLogoFile || formData.logo ? "Cambiar logo" : "Seleccionar logo"}
                     </Button>
-                    {formData.logo && (
+                    {(selectedLogoFile || formData.logo) && (
                       <Button
                         type="button"
                         variant="ghost"
@@ -234,6 +277,7 @@ export function TeamDialog({
                       </Button>
                     )}
                   </div>
+                  {selectedLogoFile && <p className="mt-2 text-xs text-muted-foreground">Vista previa: {selectedLogoFile.name}</p>}
                 </div>
               </div>
             </div>
