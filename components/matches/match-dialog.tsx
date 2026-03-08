@@ -72,7 +72,7 @@ export function MatchDialog({ match, tournamentId, teams, open, onOpenChange, on
     setValidationMessage("")
 
     const matchData: Match = {
-      id: match?.id || Date.now().toString(),
+      id: match?.id || "",
       tournamentId: match?.tournamentId || tournamentId,
       homeTeamId: formData.homeTeamId || "",
       awayTeamId: formData.awayTeamId || "",

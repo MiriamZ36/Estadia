@@ -6,6 +6,7 @@ import { useAuth } from "@/lib/auth-context"
 import { useToast } from "@/hooks/use-toast"
 import type { Match, Team, Tournament } from "@/lib/types"
 import { MatchDialog } from "./match-dialog"
+import { MatchDetail } from "./match-detail"
 import { ProgressDialog } from "@/components/ui/progress-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -33,6 +34,7 @@ export function MatchList() {
   const [matches, setMatches] = useState<Match[]>([])
   const [teams, setTeams] = useState<Team[]>([])
   const [selectedMatch, setSelectedMatch] = useState<Match | null>(null)
+  const [viewingMatchId, setViewingMatchId] = useState<string | null>(null)
   const [matchToDelete, setMatchToDelete] = useState<Match | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
@@ -194,6 +196,10 @@ export function MatchList() {
     setIsDialogOpen(true)
   }
 
+  const handleView = (matchId: string) => {
+    setViewingMatchId(matchId)
+  }
+
   const getTeamName = (teamId: string) => {
     const team = teams.find((item) => item.id === teamId)
     return team?.name || "Equipo"
@@ -216,6 +222,24 @@ export function MatchList() {
   }
 
   const canManage = user?.role === "admin" || user?.role === "referee"
+
+  if (viewingMatchId) {
+    const viewingMatch = matches.find((item) => item.id === viewingMatchId)
+    if (viewingMatch) {
+      return (
+        <MatchDetail
+          match={viewingMatch}
+          teams={teams}
+          onBack={() => setViewingMatchId(null)}
+          onMatchUpdated={async (_match: Match) => {
+            if (selectedTournament) {
+              await loadMatches(selectedTournament)
+            }
+          }}
+        />
+      )
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -277,7 +301,7 @@ export function MatchList() {
       ) : (
         <div className="space-y-4">
           {matches.map((match) => (
-            <Card key={match.id} className="transition-shadow hover:shadow-lg">
+            <Card key={match.id} className="cursor-pointer transition-shadow hover:shadow-lg" onClick={() => handleView(match.id)}>
               <CardHeader>
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
@@ -316,11 +340,26 @@ export function MatchList() {
                 </div>
                 {canManage && (
                   <div className="mt-4 flex gap-2">
-                    <Button variant="outline" size="sm" onClick={() => handleEdit(match)} className="flex-1">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        handleEdit(match)
+                      }}
+                      className="flex-1"
+                    >
                       <Pencil className="mr-2 h-4 w-4" />
                       Editar
                     </Button>
-                    <Button variant="destructive" size="sm" onClick={() => setMatchToDelete(match)}>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        setMatchToDelete(match)
+                      }}
+                    >
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
