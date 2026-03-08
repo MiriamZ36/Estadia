@@ -13,20 +13,15 @@ import { RefereeList } from "@/components/referees/referee-list"
 import { CoachList } from "@/components/coaches/coach-list"
 import { AllPlayersList } from "@/components/players/all-players-list"
 import { UserProfile } from "@/components/profile/user-profile"
-import { Card } from "@/components/ui/card"
 import { initializeSampleData } from "@/lib/sample-data"
 import { cn } from "@/lib/utils"
 
 export default function Home() {
   const { user, isLoading } = useAuth()
   const [activeTab, setActiveTab] = useState("tournaments")
-  const [isInstalled, setIsInstalled] = useState(false)
   const [isCollapsed, setIsCollapsed] = useState(false)
 
   useEffect(() => {
-    if (window.matchMedia("(display-mode: standalone)").matches) {
-      setIsInstalled(true)
-    }
     initializeSampleData()
   }, [])
 
@@ -65,14 +60,6 @@ export default function Home() {
       />
       <main className={cn("p-4 md:p-8 transition-all duration-300", isCollapsed ? "md:ml-16" : "md:ml-64")}>
         <div className="max-w-7xl mx-auto mt-12 md:mt-0">
-          {!isInstalled && (
-            <Card className="p-4 mb-6 bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800">
-              <p className="text-sm text-blue-900 dark:text-blue-100">
-                Instala Torneo Fut como aplicación para acceso rápido y experiencia mejorada.
-              </p>
-            </Card>
-          )}
-
           {activeTab === "tournaments" && <TournamentList />}
           {activeTab === "teams" && <TeamList />}
           {activeTab === "players" && <AllPlayersList />}

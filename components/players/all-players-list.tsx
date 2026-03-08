@@ -11,6 +11,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   Dialog,
   DialogContent,
@@ -41,6 +43,8 @@ export function AllPlayersList() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [selectedTeamFilter, setSelectedTeamFilter] = useState<string>("all")
+  const [searchTerm, setSearchTerm] = useState("")
+  const [positionFilter, setPositionFilter] = useState("all")
   const [progressState, setProgressState] = useState<ProgressState>(idleProgress)
 
   useEffect(() => {
@@ -168,8 +172,20 @@ export function AllPlayersList() {
   }
 
   const canManage = user?.role === "admin" || user?.role === "coach"
-  const filteredPlayers =
-    selectedTeamFilter === "all" ? players : players.filter((player) => player.teamId === selectedTeamFilter)
+  const availablePositions = Array.from(new Set(players.map((player) => player.position).filter(Boolean))).sort()
+  const filteredPlayers = players.filter((player) => {
+    const matchesTeam = selectedTeamFilter === "all" || player.teamId === selectedTeamFilter
+    const matchesPosition = positionFilter === "all" || player.position === positionFilter
+    const normalizedSearch = searchTerm.trim().toLowerCase()
+    const matchesSearch =
+      !normalizedSearch ||
+      player.name.toLowerCase().includes(normalizedSearch) ||
+      player.position.toLowerCase().includes(normalizedSearch) ||
+      getTeamName(player.teamId).toLowerCase().includes(normalizedSearch) ||
+      String(player.number).includes(normalizedSearch)
+
+    return matchesTeam && matchesPosition && matchesSearch
+  })
 
   return (
     <div className="space-y-6">
@@ -213,16 +229,33 @@ export function AllPlayersList() {
         })}
       </div>
 
+      <div className="grid gap-3 md:grid-cols-2">
+        <Input
+          value={searchTerm}
+          onChange={(event) => setSearchTerm(event.target.value)}
+          placeholder="Buscar por nombre, numero, posicion o equipo"
+        />
+        <Select value={positionFilter} onValueChange={setPositionFilter}>
+          <SelectTrigger>
+            <SelectValue placeholder="Filtrar por posicion" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todas las posiciones</SelectItem>
+            {availablePositions.map((position) => (
+              <SelectItem key={position} value={position}>
+                {position}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
       {filteredPlayers.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
             <Users className="mb-4 h-16 w-16 text-muted-foreground" />
-            <p className="mb-2 text-lg font-medium">No hay jugadores registrados</p>
-            <p className="mb-4 text-sm text-muted-foreground">
-              {selectedTeamFilter === "all"
-                ? "Comienza agregando jugadores al sistema"
-                : "Este equipo aun no tiene jugadores"}
-            </p>
+            <p className="mb-2 text-lg font-medium">No se encontraron jugadores</p>
+            <p className="mb-4 text-sm text-muted-foreground">Ajusta la busqueda o los filtros para ver resultados</p>
             {canManage && (
               <Button onClick={handleCreate}>
                 <Plus className="mr-2 h-4 w-4" />

@@ -68,6 +68,8 @@ export interface Coach {
   email: string
   phone?: string
   specialty?: string
+  teamId?: string
+  teamName?: string
 }
 
 export interface Match {
