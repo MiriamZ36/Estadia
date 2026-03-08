@@ -637,7 +637,7 @@ export const sampleReferees: Referee[] = [
     name: "Mario Hernández",
     license: "FIFA-2024-001",
     experience: 10,
-    email: "mario.h@ligasmart.com",
+    email: "mario.h@futpro.com",
     phone: "+52 123 456 7890",
   },
   {
@@ -645,7 +645,7 @@ export const sampleReferees: Referee[] = [
     name: "Ricardo Sánchez",
     license: "NAC-2023-045",
     experience: 5,
-    email: "ricardo.s@ligasmart.com",
+    email: "ricardo.s@futpro.com",
     phone: "+52 123 456 7891",
   },
   {
@@ -653,7 +653,7 @@ export const sampleReferees: Referee[] = [
     name: "Fernando Lara",
     license: "NAC-2024-012",
     experience: 8,
-    email: "fernando.l@ligasmart.com",
+    email: "fernando.l@futpro.com",
     phone: "+52 123 456 7892",
   },
 ]
@@ -664,7 +664,7 @@ export const sampleCoaches: Coach[] = [
     name: "Alberto Gómez",
     license: "UEFA B",
     experience: 15,
-    email: "alberto.g@ligasmart.com",
+    email: "alberto.g@futpro.com",
     phone: "+52 234 567 8901",
     specialty: "Fútbol Ofensivo",
   },
@@ -673,7 +673,7 @@ export const sampleCoaches: Coach[] = [
     name: "Rafael Morales",
     license: "CONMEBOL Pro",
     experience: 8,
-    email: "rafael.m@ligasmart.com",
+    email: "rafael.m@futpro.com",
     phone: "+52 234 567 8902",
     specialty: "Táctica Defensiva",
   },
@@ -682,7 +682,7 @@ export const sampleCoaches: Coach[] = [
     name: "Jorge Campos",
     license: "UEFA A",
     experience: 12,
-    email: "jorge.c@ligasmart.com",
+    email: "jorge.c@futpro.com",
     phone: "+52 234 567 8903",
     specialty: "Desarrollo Juvenil",
   },
@@ -896,14 +896,14 @@ export const sampleMatchEvents: MatchEvent[] = [
 ]
 
 export const initializeSampleData = () => {
-  const existingTournaments = localStorage.getItem("ligasmart_tournaments")
+  const existingTournaments = localStorage.getItem("futpro_tournaments")
   if (!existingTournaments || JSON.parse(existingTournaments).length === 0) {
-    localStorage.setItem("ligasmart_tournaments", JSON.stringify(sampleTournaments))
-    localStorage.setItem("ligasmart_teams", JSON.stringify(sampleTeams))
-    localStorage.setItem("ligasmart_players", JSON.stringify(samplePlayers))
-    localStorage.setItem("ligasmart_referees", JSON.stringify(sampleReferees))
-    localStorage.setItem("ligasmart_coaches", JSON.stringify(sampleCoaches))
-    localStorage.setItem("ligasmart_matches", JSON.stringify(sampleMatches))
-    localStorage.setItem("ligasmart_match_events", JSON.stringify(sampleMatchEvents))
+    localStorage.setItem("futpro_tournaments", JSON.stringify(sampleTournaments))
+    localStorage.setItem("futpro_teams", JSON.stringify(sampleTeams))
+    localStorage.setItem("futpro_players", JSON.stringify(samplePlayers))
+    localStorage.setItem("futpro_referees", JSON.stringify(sampleReferees))
+    localStorage.setItem("futpro_coaches", JSON.stringify(sampleCoaches))
+    localStorage.setItem("futpro_matches", JSON.stringify(sampleMatches))
+    localStorage.setItem("futpro_match_events", JSON.stringify(sampleMatchEvents))
   }
 }
