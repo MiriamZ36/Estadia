@@ -10,6 +10,7 @@ import { TeamDialog } from "./team-dialog"
 import { ProgressDialog } from "@/components/ui/progress-dialog"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
   Dialog,
   DialogContent,
@@ -286,12 +287,18 @@ export function TeamList() {
             <Card key={team.id} className="transition-shadow hover:shadow-lg">
               <CardHeader>
                 <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <CardTitle className="text-xl">{team.name}</CardTitle>
-                    <CardDescription className="mt-2 flex items-center">
-                      <User className="mr-1 h-4 w-4" />
-                      {getPlayerCount(team.id)} jugadores
-                    </CardDescription>
+                  <div className="flex items-center gap-3">
+                    <Avatar className="h-24 w-24 border">
+                      <AvatarImage src={team.logo || "/placeholder.svg"} alt={team.name} />
+                      <AvatarFallback>{team.name.slice(0, 2).toUpperCase()}</AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1">
+                      <CardTitle className="text-xl">{team.name}</CardTitle>
+                      <CardDescription className="mt-2 flex items-center">
+                        <User className="mr-1 h-4 w-4" />
+                        {getPlayerCount(team.id)} jugadores
+                      </CardDescription>
+                    </div>
                   </div>
                 </div>
               </CardHeader>
