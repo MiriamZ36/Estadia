@@ -4,8 +4,8 @@ import { useState, useEffect } from "react"
 import { useAuth } from "@/lib/auth-context"
 import { useToast } from "@/hooks/use-toast"
 import { useLoading } from "@/lib/loading-context"
-import { getTournaments, getTeams, saveTeam, deleteTeam, getPlayers } from "@/lib/storage"
-import type { Tournament, Team } from "@/lib/types"
+import { getTournaments, getTeams, saveTeam, deleteTeam } from "@/lib/storage"
+import type { Player, Tournament, Team } from "@/lib/types"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -20,6 +20,7 @@ export function TeamList() {
   const [tournaments, setTournaments] = useState<Tournament[]>([])
   const [selectedTournament, setSelectedTournament] = useState<string>("")
   const [teams, setTeams] = useState<Team[]>([])
+  const [playerCounts, setPlayerCounts] = useState<Record<string, number>>({})
   const [selectedTeam, setSelectedTeam] = useState<Team | null>(null)
   const [viewingTeamId, setViewingTeamId] = useState<string | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
@@ -35,6 +36,7 @@ export function TeamList() {
   useEffect(() => {
     if (selectedTournament) {
       loadTeams()
+      void loadPlayerCounts()
     }
   }, [selectedTournament])
 
@@ -45,11 +47,30 @@ export function TeamList() {
     }
   }
 
+  const loadPlayerCounts = async () => {
+    const response = await fetch("/api/players", {
+      cache: "no-store",
+    })
+    const result = await response.json()
+
+    if (!response.ok) {
+      return
+    }
+
+    const counts = (result.players || []).reduce((acc: Record<string, number>, player: Player) => {
+      acc[player.teamId] = (acc[player.teamId] || 0) + 1
+      return acc
+    }, {})
+
+    setPlayerCounts(counts)
+  }
+
   const handleSave = (team: Team) => {
     try {
       startLoading(team.id ? "Actualizando equipo..." : "Creando equipo...")
       saveTeam(team)
       loadTeams()
+      void loadPlayerCounts()
       setIsDialogOpen(false)
       setSelectedTeam(null)
       toast({
@@ -79,6 +100,7 @@ export function TeamList() {
         startLoading("Eliminando equipo...")
         deleteTeam(id)
         loadTeams()
+        void loadPlayerCounts()
         toast({
           title: "Equipo eliminado",
           description: `${team?.name || "El equipo"} ha sido eliminado exitosamente.`,
@@ -101,7 +123,7 @@ export function TeamList() {
   }
 
   const getPlayerCount = (teamId: string) => {
-    return getPlayers(teamId).length
+    return playerCounts[teamId] || 0
   }
 
   const canManage = user?.role === "admin" || user?.role === "coach"

@@ -1,92 +1,165 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useEffect, useState } from "react"
+import { Pencil, Plus, Trash2, Users } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
 import { useToast } from "@/hooks/use-toast"
-import { useLoading } from "@/lib/loading-context"
-import { getPlayers, getTeams, savePlayer, deletePlayer } from "@/lib/storage"
-import type { Team, Player } from "@/lib/types"
+import type { Player, Team } from "@/lib/types"
+import { PlayerDialog } from "@/components/teams/player-dialog"
+import { ProgressDialog } from "@/components/ui/progress-dialog"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Plus, Pencil, Trash2, Users } from "lucide-react"
-import { PlayerDialog } from "@/components/teams/player-dialog"
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
-import { Badge } from "@/components/ui/badge"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+
+type ProgressState = {
+  open: boolean
+  title: string
+  description: string
+}
+
+const idleProgress: ProgressState = {
+  open: false,
+  title: "",
+  description: "",
+}
 
 export function AllPlayersList() {
   const { user } = useAuth()
   const { toast } = useToast()
-  const { startLoading, stopLoading } = useLoading()
   const [players, setPlayers] = useState<Player[]>([])
   const [teams, setTeams] = useState<Team[]>([])
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null)
+  const [playerToDelete, setPlayerToDelete] = useState<Player | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
   const [selectedTeamFilter, setSelectedTeamFilter] = useState<string>("all")
+  const [progressState, setProgressState] = useState<ProgressState>(idleProgress)
 
   useEffect(() => {
-    loadData()
+    void loadData()
   }, [])
 
-  const loadData = () => {
-    const allPlayers = getPlayers()
-    const allTeams = getTeams()
-    setPlayers(allPlayers)
-    setTeams(allTeams)
+  const loadData = async () => {
+    const [playersResponse, teamsResponse] = await Promise.all([
+      fetch("/api/players", { cache: "no-store" }),
+      fetch("/api/teams", { cache: "no-store" }),
+    ])
+
+    const playersResult = await playersResponse.json()
+    const teamsResult = await teamsResponse.json()
+
+    if (!playersResponse.ok || !teamsResponse.ok) {
+      toast({
+        variant: "destructive",
+        title: "No fue posible cargar los jugadores",
+        description: playersResult.error || teamsResult.error || "Verifica tu conexion y la sesion actual.",
+      })
+      return
+    }
+
+    setPlayers(playersResult.players || [])
+    setTeams(teamsResult.teams || [])
   }
 
   const getTeamName = (teamId: string) => {
-    const team = teams.find((t) => t.id === teamId)
+    const team = teams.find((item) => item.id === teamId)
     return team?.name || "Sin equipo"
   }
 
-  const handleSave = (player: Player) => {
-    try {
-      startLoading(player.id ? "Actualizando jugador..." : "Creando jugador...")
-      savePlayer(player)
-      loadData()
-      setIsDialogOpen(false)
-      setSelectedPlayer(null)
+  const openProgress = (title: string, description: string) => {
+    setProgressState({
+      open: true,
+      title,
+      description,
+    })
+  }
+
+  const closeProgress = () => {
+    setProgressState(idleProgress)
+  }
+
+  const handleSave = async (player: Player) => {
+    const isEditing = Boolean(player.id)
+
+    setIsSaving(true)
+    openProgress(
+      isEditing ? "Actualizando jugador" : "Creando jugador",
+      isEditing ? "Guardando los cambios del jugador en la base de datos." : "Registrando al nuevo jugador en la base de datos.",
+    )
+
+    const response = await fetch(isEditing ? `/api/players/${player.id}` : "/api/players", {
+      method: isEditing ? "PATCH" : "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(player),
+    })
+
+    const result = await response.json()
+    closeProgress()
+    setIsSaving(false)
+
+    if (!response.ok) {
       toast({
-        title: player.id ? "Jugador actualizado" : "Jugador creado",
-        description: `${player.name} ha sido ${player.id ? "actualizado" : "creado"} exitosamente.`,
-      })
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Ocurrió un error al guardar el jugador.",
         variant: "destructive",
+        title: "No fue posible guardar el jugador",
+        description: result.error || "La operacion no pudo completarse.",
       })
-    } finally {
-      stopLoading()
+      return
     }
+
+    await loadData()
+    setIsDialogOpen(false)
+    setSelectedPlayer(null)
+
+    toast({
+      title: isEditing ? "Jugador actualizado" : "Jugador creado",
+      description: `${result.player.name} fue ${isEditing ? "actualizado" : "registrado"} correctamente.`,
+    })
+  }
+
+  const handleDelete = async () => {
+    if (!playerToDelete) return
+
+    openProgress("Eliminando jugador", "Estamos removiendo al jugador y sus relaciones derivadas.")
+
+    const response = await fetch(`/api/players/${playerToDelete.id}`, {
+      method: "DELETE",
+    })
+
+    const result = await response.json()
+    closeProgress()
+
+    if (!response.ok) {
+      toast({
+        variant: "destructive",
+        title: "No fue posible eliminar el jugador",
+        description: result.error || "La eliminacion no pudo completarse.",
+      })
+      return
+    }
+
+    const deletedPlayerName = playerToDelete.name
+    setPlayerToDelete(null)
+    await loadData()
+
+    toast({
+      title: "Jugador eliminado",
+      description: `${deletedPlayerName} fue eliminado correctamente.`,
+    })
   }
 
   const handleEdit = (player: Player) => {
     setSelectedPlayer(player)
     setIsDialogOpen(true)
-  }
-
-  const handleDelete = (id: string) => {
-    const player = players.find((p) => p.id === id)
-    if (confirm("¿Estás seguro de eliminar este jugador?")) {
-      try {
-        startLoading("Eliminando jugador...")
-        deletePlayer(id)
-        loadData()
-        toast({
-          title: "Jugador eliminado",
-          description: `${player?.name || "El jugador"} ha sido eliminado exitosamente.`,
-        })
-      } catch (error) {
-        toast({
-          title: "Error",
-          description: "Ocurrió un error al eliminar el jugador.",
-          variant: "destructive",
-        })
-      } finally {
-        stopLoading()
-      }
-    }
   }
 
   const handleCreate = () => {
@@ -95,30 +168,28 @@ export function AllPlayersList() {
   }
 
   const canManage = user?.role === "admin" || user?.role === "coach"
-
   const filteredPlayers =
-    selectedTeamFilter === "all" ? players : players.filter((p) => p.teamId === selectedTeamFilter)
+    selectedTeamFilter === "all" ? players : players.filter((player) => player.teamId === selectedTeamFilter)
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
         <div>
-          <h2 className="text-3xl font-bold flex items-center gap-2">
+          <h2 className="flex items-center gap-2 text-3xl font-bold">
             <Users className="h-8 w-8" />
             Jugadores
           </h2>
-          <p className="text-muted-foreground">Gestión de todos los jugadores registrados</p>
+          <p className="text-muted-foreground">Gestion de todos los jugadores registrados</p>
         </div>
         {canManage && (
           <Button onClick={handleCreate}>
-            <Plus className="h-4 w-4 mr-2" />
+            <Plus className="mr-2 h-4 w-4" />
             Nuevo Jugador
           </Button>
         )}
       </div>
 
-      {/* Filter by team */}
-      <div className="flex gap-2 flex-wrap">
+      <div className="flex flex-wrap gap-2">
         <Button
           variant={selectedTeamFilter === "all" ? "default" : "outline"}
           size="sm"
@@ -127,7 +198,8 @@ export function AllPlayersList() {
           Todos ({players.length})
         </Button>
         {teams.map((team) => {
-          const count = players.filter((p) => p.teamId === team.id).length
+          const count = players.filter((player) => player.teamId === team.id).length
+
           return (
             <Button
               key={team.id}
@@ -144,16 +216,16 @@ export function AllPlayersList() {
       {filteredPlayers.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
-            <Users className="h-16 w-16 text-muted-foreground mb-4" />
-            <p className="text-lg font-medium mb-2">No hay jugadores registrados</p>
-            <p className="text-sm text-muted-foreground mb-4">
+            <Users className="mb-4 h-16 w-16 text-muted-foreground" />
+            <p className="mb-2 text-lg font-medium">No hay jugadores registrados</p>
+            <p className="mb-4 text-sm text-muted-foreground">
               {selectedTeamFilter === "all"
                 ? "Comienza agregando jugadores al sistema"
-                : "Este equipo no tiene jugadores"}
+                : "Este equipo aun no tiene jugadores"}
             </p>
             {canManage && (
               <Button onClick={handleCreate}>
-                <Plus className="h-4 w-4 mr-2" />
+                <Plus className="mr-2 h-4 w-4" />
                 Agregar Jugador
               </Button>
             )}
@@ -162,18 +234,18 @@ export function AllPlayersList() {
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {filteredPlayers.map((player) => (
-            <Card key={player.id} className="hover:shadow-lg transition-shadow">
+            <Card key={player.id} className="transition-shadow hover:shadow-lg">
               <CardHeader>
                 <div className="flex items-center gap-4">
                   {player.photo ? (
                     <Avatar className="h-16 w-16">
                       <AvatarImage src={player.photo || "/placeholder.svg"} alt={player.name} />
-                      <AvatarFallback className="bg-gradient-to-br from-green-600 to-emerald-700 text-white font-bold text-xl">
+                      <AvatarFallback className="bg-gradient-to-br from-green-600 to-emerald-700 text-xl font-bold text-white">
                         {player.number}
                       </AvatarFallback>
                     </Avatar>
                   ) : (
-                    <div className="h-16 w-16 rounded-full bg-gradient-to-br from-green-600 to-emerald-700 flex items-center justify-center text-white font-bold text-2xl">
+                    <div className="flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-green-600 to-emerald-700 text-2xl font-bold text-white">
                       {player.number}
                     </div>
                   )}
@@ -190,10 +262,10 @@ export function AllPlayersList() {
                 <CardContent>
                   <div className="flex gap-2">
                     <Button variant="outline" size="sm" onClick={() => handleEdit(player)} className="flex-1">
-                      <Pencil className="h-4 w-4 mr-2" />
+                      <Pencil className="mr-2 h-4 w-4" />
                       Editar
                     </Button>
-                    <Button variant="destructive" size="sm" onClick={() => handleDelete(player.id)}>
+                    <Button variant="destructive" size="sm" onClick={() => setPlayerToDelete(player)}>
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
@@ -206,11 +278,36 @@ export function AllPlayersList() {
 
       <PlayerDialog
         player={selectedPlayer}
-        teamId={selectedPlayer?.teamId}
+        teamId={undefined}
+        teams={teams}
         open={isDialogOpen}
         onOpenChange={setIsDialogOpen}
         onSave={handleSave}
+        isSaving={isSaving}
       />
+
+      <Dialog open={Boolean(playerToDelete)} onOpenChange={(open) => !open && setPlayerToDelete(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Eliminar jugador</DialogTitle>
+            <DialogDescription>
+              {playerToDelete
+                ? `Se eliminara a ${playerToDelete.name}. Esta accion no se puede deshacer.`
+                : "Confirma la eliminacion del jugador."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-2">
+            <Button variant="destructive" onClick={() => void handleDelete()} className="flex-1">
+              Eliminar
+            </Button>
+            <Button variant="outline" onClick={() => setPlayerToDelete(null)}>
+              Cancelar
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <ProgressDialog open={progressState.open} title={progressState.title} description={progressState.description} />
     </div>
   )
 }
