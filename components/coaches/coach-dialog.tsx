@@ -113,6 +113,7 @@ export function CoachDialog({ open, onOpenChange, coach, teams, onSave, isSaving
                 label="Foto"
                 value={formData.photo}
                 onChange={(value) => setFormData({ ...formData, photo: value })}
+                folder="coaches"
               />
             </div>
 

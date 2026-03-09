@@ -3,7 +3,7 @@
 import type React from "react"
 
 import { useEffect, useState } from "react"
-import { AlertTriangle, Trash2, UserPlus } from "lucide-react"
+import { AlertTriangle, Pencil, Trash2, UserPlus } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
 import { useToast } from "@/hooks/use-toast"
 import { Button } from "@/components/ui/button"
@@ -29,9 +29,17 @@ export function UserManagement() {
   const { toast } = useToast()
   const [users, setUsers] = useState<User[]>([])
   const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isClearDialogOpen, setIsClearDialogOpen] = useState(false)
   const [userToDelete, setUserToDelete] = useState<User | null>(null)
+  const [userToEdit, setUserToEdit] = useState<User | null>(null)
   const [formData, setFormData] = useState({
+    name: "",
+    email: "",
+    password: "",
+    role: "fan" as User["role"],
+  })
+  const [editFormData, setEditFormData] = useState({
     name: "",
     email: "",
     password: "",
@@ -113,6 +121,61 @@ export function UserManagement() {
     toast({
       title: "Usuario eliminado",
       description: "La cuenta fue eliminada correctamente.",
+    })
+  }
+
+  const openEditDialog = (targetUser: User) => {
+    setUserToEdit(targetUser)
+    setEditFormData({
+      name: targetUser.name,
+      email: targetUser.email,
+      password: "",
+      role: targetUser.role,
+    })
+    setIsEditDialogOpen(true)
+  }
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!userToEdit) return
+
+    const response = await fetch("/api/admin/users", {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        id: userToEdit.id,
+        name: editFormData.name,
+        email: editFormData.email,
+        role: editFormData.role,
+        password: editFormData.password || undefined,
+      }),
+    })
+
+    const result = await response.json()
+    if (!response.ok) {
+      toast({
+        variant: "destructive",
+        title: "No fue posible actualizar el usuario",
+        description: result.error || "Intenta nuevamente.",
+      })
+      return
+    }
+
+    setIsEditDialogOpen(false)
+    setUserToEdit(null)
+    setEditFormData({
+      name: "",
+      email: "",
+      password: "",
+      role: "fan",
+    })
+    await loadUsers()
+
+    toast({
+      title: "Usuario actualizado",
+      description: "La cuenta fue actualizada correctamente.",
     })
   }
 
@@ -284,14 +347,19 @@ export function UserManagement() {
                     </TableCell>
                     <TableCell>{new Date(user.createdAt).toLocaleDateString("es-MX")}</TableCell>
                     <TableCell className="text-right">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setUserToDelete(user)}
-                        disabled={user.id === currentUser?.id}
-                      >
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
+                      <div className="flex justify-end gap-1">
+                        <Button variant="ghost" size="sm" onClick={() => openEditDialog(user)}>
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setUserToDelete(user)}
+                          disabled={user.id === currentUser?.id}
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 )
@@ -319,6 +387,87 @@ export function UserManagement() {
               Cancelar
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={isEditDialogOpen}
+        onOpenChange={(open) => {
+          setIsEditDialogOpen(open)
+          if (!open) {
+            setUserToEdit(null)
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Editar usuario</DialogTitle>
+            <DialogDescription>Actualiza nombre, correo, rol y contrasena opcional.</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleEditSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-name">Nombre completo</Label>
+              <Input
+                id="edit-name"
+                value={editFormData.name}
+                onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-email">Correo electronico</Label>
+              <Input
+                id="edit-email"
+                type="email"
+                value={editFormData.email}
+                onChange={(e) => setEditFormData({ ...editFormData, email: e.target.value })}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-password">Nueva contrasena (opcional)</Label>
+              <Input
+                id="edit-password"
+                type="password"
+                minLength={6}
+                value={editFormData.password}
+                onChange={(e) => setEditFormData({ ...editFormData, password: e.target.value })}
+                placeholder="Deja vacio para conservar la actual"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-role">Rol</Label>
+              <Select
+                value={editFormData.role}
+                onValueChange={(value: User["role"]) => setEditFormData({ ...editFormData, role: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="admin">Administrador</SelectItem>
+                  <SelectItem value="referee">Arbitro</SelectItem>
+                  <SelectItem value="coach">Entrenador</SelectItem>
+                  <SelectItem value="fan">Aficionado</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex gap-2">
+              <Button type="submit" className="flex-1">
+                Guardar cambios
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setIsEditDialogOpen(false)
+                  setUserToEdit(null)
+                }}
+              >
+                Cancelar
+              </Button>
+            </div>
+          </form>
         </DialogContent>
       </Dialog>
     </div>

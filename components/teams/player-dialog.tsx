@@ -204,6 +204,7 @@ export function PlayerDialog({ player, teamId, teams, open, onOpenChange, onSave
                   value={formData.photo}
                   onChange={(value) => setFormData({ ...formData, photo: value })}
                   accept="image/*"
+                  folder="players"
                 />
               </div>
             </TabsContent>

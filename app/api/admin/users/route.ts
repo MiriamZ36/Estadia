@@ -145,3 +145,82 @@ export async function DELETE(request: Request) {
 
   return NextResponse.json({ success: true })
 }
+
+export async function PATCH(request: Request) {
+  const guard = await requireAdmin()
+
+  if ("error" in guard) {
+    return NextResponse.json({ error: guard.error }, { status: guard.status })
+  }
+
+  const body = await request.json()
+  const { id, name, email, role, password } = body as {
+    id?: string
+    name?: string
+    email?: string
+    role?: "admin" | "referee" | "coach" | "fan"
+    password?: string
+  }
+
+  if (!id || !name || !email || !role) {
+    return NextResponse.json({ error: "Faltan datos requeridos para actualizar el usuario." }, { status: 400 })
+  }
+
+  if (id === guard.userId && role !== "admin") {
+    return NextResponse.json({ error: "No puedes quitarte el rol de administrador." }, { status: 400 })
+  }
+
+  if (password && String(password).length < 6) {
+    return NextResponse.json({ error: "La contrasena debe tener al menos 6 caracteres." }, { status: 400 })
+  }
+
+  const admin = createSupabaseAdminClient()
+  const { data: existingAuth, error: existingAuthError } = await admin.auth.admin.getUserById(id)
+
+  if (existingAuthError || !existingAuth.user) {
+    return NextResponse.json({ error: "No se encontro el usuario en Auth." }, { status: 404 })
+  }
+
+  const updates: {
+    email: string
+    user_metadata: { name: string; role: string }
+    password?: string
+  } = {
+    email,
+    user_metadata: {
+      name,
+      role,
+    },
+  }
+
+  if (password) {
+    updates.password = password
+  }
+
+  const { error: updateAuthError } = await admin.auth.admin.updateUserById(id, updates)
+  if (updateAuthError) {
+    return NextResponse.json({ error: updateAuthError.message }, { status: 400 })
+  }
+
+  const { error: updateProfileError } = await admin
+    .from("profiles")
+    .update({
+      name,
+      role,
+    })
+    .eq("id", id)
+
+  if (updateProfileError) {
+    return NextResponse.json({ error: updateProfileError.message }, { status: 500 })
+  }
+
+  return NextResponse.json({
+    user: {
+      id,
+      name,
+      email,
+      role,
+      createdAt: existingAuth.user.created_at,
+    },
+  })
+}

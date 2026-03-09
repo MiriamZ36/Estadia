@@ -1,9 +1,9 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { getTournaments, getMatches, getTeams, getPlayers, getMatchEvents } from "@/lib/storage"
-import { calculateStandings, calculatePlayerStats, getTeamForm } from "@/lib/stats-calculator"
-import type { Tournament, Team, Standing } from "@/lib/types"
+import { useToast } from "@/hooks/use-toast"
+import { calculatePlayerStats, getTeamForm } from "@/lib/stats-calculator"
+import type { Match, MatchEvent, Player, Tournament, Team, Standing } from "@/lib/types"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -27,41 +27,84 @@ import {
 const COLORS = ["#10b981", "#3b82f6", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899"]
 
 export function StatisticsView() {
+  const { toast } = useToast()
   const [tournaments, setTournaments] = useState<Tournament[]>([])
   const [selectedTournament, setSelectedTournament] = useState<string>("")
   const [standings, setStandings] = useState<Standing[]>([])
   const [teams, setTeams] = useState<Team[]>([])
+  const [matches, setMatches] = useState<Match[]>([])
   const [topScorers, setTopScorers] = useState<any[]>([])
   const [goalsChartData, setGoalsChartData] = useState<any[]>([])
   const [performanceChartData, setPerformanceChartData] = useState<any[]>([])
   const [resultsDistribution, setResultsDistribution] = useState<any[]>([])
 
   useEffect(() => {
-    const tournamentsData = getTournaments()
-    setTournaments(tournamentsData)
-    if (tournamentsData.length > 0 && !selectedTournament) {
-      setSelectedTournament(tournamentsData[0].id)
+    const loadTournaments = async () => {
+      const response = await fetch("/api/tournaments", { cache: "no-store" })
+      const result = await response.json()
+
+      if (!response.ok) {
+        toast({
+          variant: "destructive",
+          title: "No fue posible cargar torneos",
+          description: result.error || "Intenta nuevamente.",
+        })
+        return
+      }
+
+      const tournamentsData = (result.tournaments || []) as Tournament[]
+      setTournaments(tournamentsData)
+      if (tournamentsData.length > 0) {
+        setSelectedTournament((previous) => previous || tournamentsData[0].id)
+      }
     }
-  }, [])
+
+    void loadTournaments()
+  }, [toast])
 
   useEffect(() => {
     if (selectedTournament) {
-      loadStatistics()
+      void loadStatistics()
     }
   }, [selectedTournament])
 
-  const loadStatistics = () => {
-    const teamsData = getTeams(selectedTournament)
-    const matches = getMatches(selectedTournament)
-    const standingsData = calculateStandings(teamsData, matches)
+  const loadStatistics = async () => {
+    const [teamsResponse, matchesResponse, standingsResponse] = await Promise.all([
+      fetch(`/api/teams?tournamentId=${selectedTournament}`, { cache: "no-store" }),
+      fetch(`/api/matches?tournamentId=${selectedTournament}`, { cache: "no-store" }),
+      fetch(`/api/standings?tournamentId=${selectedTournament}`, { cache: "no-store" }),
+    ])
+
+    const teamsResult = await teamsResponse.json()
+    const matchesResult = await matchesResponse.json()
+    const standingsResult = await standingsResponse.json()
+
+    if (!teamsResponse.ok || !matchesResponse.ok || !standingsResponse.ok) {
+      toast({
+        variant: "destructive",
+        title: "No fue posible cargar estadísticas",
+        description: teamsResult.error || matchesResult.error || standingsResult.error || "Intenta nuevamente.",
+      })
+      return
+    }
+
+    const teamsData = (teamsResult.teams || []) as Team[]
+    const matchesData = (matchesResult.matches || []) as Match[]
+    const standingsData = (standingsResult.standings || []) as Standing[]
 
     setTeams(teamsData)
+    setMatches(matchesData)
     setStandings(standingsData)
 
-    const allPlayers = teamsData.flatMap((team) => getPlayers(team.id))
-    const allEvents = matches.flatMap((match) => {
-      return getMatchEvents(match.id)
-    })
+    const playersRequests = teamsData.map((team) => fetch(`/api/players?teamId=${team.id}`, { cache: "no-store" }))
+    const eventsRequests = matchesData.map((match) => fetch(`/api/match-events?matchId=${match.id}`, { cache: "no-store" }))
+
+    const [playersResponses, eventsResponses] = await Promise.all([Promise.all(playersRequests), Promise.all(eventsRequests)])
+    const playersResults = await Promise.all(playersResponses.map((response) => response.json()))
+    const eventsResults = await Promise.all(eventsResponses.map((response) => response.json()))
+
+    const allPlayers = playersResults.flatMap((result) => (result.players || []) as Player[])
+    const allEvents = eventsResults.flatMap((result) => (result.events || []) as MatchEvent[])
 
     const playerStats = calculatePlayerStats(allPlayers, allEvents)
     const topScorersData = playerStats
@@ -86,7 +129,6 @@ export function StatisticsView() {
     }))
     setPerformanceChartData(performanceData)
 
-    const totalMatches = matches.filter((m) => m.status === "finished").length
     const totalWins = standingsData.reduce((acc, s) => acc + s.won, 0)
     const totalDraws = standingsData.reduce((acc, s) => acc + s.drawn, 0)
     const totalLosses = standingsData.reduce((acc, s) => acc + s.lost, 0)
@@ -165,6 +207,18 @@ export function StatisticsView() {
                 <CardDescription>Clasificación actualizada del torneo</CardDescription>
               </CardHeader>
               <CardContent>
+                <div className="mb-4 rounded-lg border bg-muted/40 p-3 text-xs text-muted-foreground">
+                  <span className="font-medium text-foreground">Simbologia:</span>{" "}
+                  <span className="mr-2">PJ: Partidos Jugados</span>
+                  <span className="mr-2">G: Ganados</span>
+                  <span className="mr-2">E: Empatados</span>
+                  <span className="mr-2">P: Perdidos</span>
+                  <span className="mr-2">GF: Goles a Favor</span>
+                  <span className="mr-2">GC: Goles en Contra</span>
+                  <span className="mr-2">DG: Diferencia de Gol</span>
+                  <span className="mr-2">Pts: Puntos</span>
+                  <span>Forma: ultimos 5 (G/E/P)</span>
+                </div>
                 {standings.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
                     <p>No hay datos suficientes para generar la tabla</p>
@@ -189,7 +243,7 @@ export function StatisticsView() {
                       </thead>
                       <tbody>
                         {standings.map((standing, index) => {
-                          const form = getTeamForm(standing.teamId, getMatches(selectedTournament))
+                          const form = getTeamForm(standing.teamId, matches)
                           return (
                             <tr key={standing.teamId} className="border-b hover:bg-muted/50">
                               <td className="py-3 px-2">
