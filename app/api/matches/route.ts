@@ -15,6 +15,7 @@ type MatchRow = {
   home_score: number | null
   away_score: number | null
   referee_id: string | null
+  updated_at: string
 }
 
 type TeamRow = {
@@ -83,6 +84,7 @@ function mapMatch(row: MatchRow) {
     homeScore: row.home_score ?? undefined,
     awayScore: row.away_score ?? undefined,
     refereeId: row.referee_id ?? undefined,
+    updatedAt: row.updated_at,
   }
 }
 
@@ -162,7 +164,7 @@ export async function GET(request: Request) {
 
   let query = admin
     .from("matches")
-    .select("id, tournament_id, home_team_id, away_team_id, match_date, match_time, venue, status, home_score, away_score, referee_id")
+    .select("id, tournament_id, home_team_id, away_team_id, match_date, match_time, venue, status, home_score, away_score, referee_id, updated_at")
     .order("match_date", { ascending: true })
     .order("match_time", { ascending: true })
 
@@ -222,7 +224,7 @@ export async function POST(request: Request) {
       away_score: body.awayScore ?? null,
       referee_id: body.refereeId || null,
     })
-    .select("id, tournament_id, home_team_id, away_team_id, match_date, match_time, venue, status, home_score, away_score, referee_id")
+    .select("id, tournament_id, home_team_id, away_team_id, match_date, match_time, venue, status, home_score, away_score, referee_id, updated_at")
     .single()
 
   if (error || !data) {

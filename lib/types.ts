@@ -84,6 +84,7 @@ export interface Match {
   homeScore?: number
   awayScore?: number
   refereeId?: string
+  updatedAt?: string
 }
 
 export interface MatchEvent {

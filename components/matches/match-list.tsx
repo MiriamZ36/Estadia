@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { CalendarIcon, Clock, Pencil, Plus, Trash2 } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
 import { useToast } from "@/hooks/use-toast"
@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 type ProgressState = {
@@ -24,6 +25,21 @@ const idleProgress: ProgressState = {
   open: false,
   title: "",
   description: "",
+}
+
+type MatchStatusFilter = "active" | "all" | "scheduled" | "live" | "finished"
+type MatchClockState = {
+  elapsedSeconds: number
+  isPaused: boolean
+  updatedAt: number
+}
+
+const MATCH_CLOCK_STORAGE_PREFIX = "match-stopwatch:"
+
+function formatStopwatch(totalSeconds: number) {
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`
 }
 
 export function MatchList() {
@@ -39,6 +55,9 @@ export function MatchList() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [progressState, setProgressState] = useState<ProgressState>(idleProgress)
+  const [searchTerm, setSearchTerm] = useState("")
+  const [statusFilter, setStatusFilter] = useState<MatchStatusFilter>("active")
+  const [clockTick, setClockTick] = useState(0)
 
   useEffect(() => {
     void loadTournaments()
@@ -49,6 +68,17 @@ export function MatchList() {
     void loadMatches(selectedTournament)
     void loadTeams(selectedTournament)
   }, [selectedTournament])
+
+  useEffect(() => {
+    const hasLiveMatches = matches.some((match) => match.status === "live")
+    if (!hasLiveMatches) return
+
+    const interval = window.setInterval(() => {
+      setClockTick((previous) => previous + 1)
+    }, 1000)
+
+    return () => window.clearInterval(interval)
+  }, [matches])
 
   const openProgress = (title: string, description: string) => {
     setProgressState({
@@ -205,6 +235,27 @@ export function MatchList() {
     return team?.name || "Equipo"
   }
 
+  const getLiveElapsedSeconds = (match: Match) => {
+    if (match.status !== "live" || typeof window === "undefined") return null
+    const raw = window.localStorage.getItem(`${MATCH_CLOCK_STORAGE_PREFIX}${match.id}`)
+    if (!raw) {
+      if (!match.updatedAt) return 0
+      return Math.max(0, Math.floor((Date.now() - new Date(match.updatedAt).getTime()) / 1000))
+    }
+
+    try {
+      const parsed = JSON.parse(raw) as MatchClockState
+      const safeElapsed = Number.isFinite(parsed.elapsedSeconds) ? Math.max(0, Math.floor(parsed.elapsedSeconds)) : 0
+      const safeIsPaused = Boolean(parsed.isPaused)
+      const safeUpdatedAt = Number.isFinite(parsed.updatedAt) ? parsed.updatedAt : Date.now()
+      const elapsedWhileAway = safeIsPaused ? 0 : Math.max(0, Math.floor((Date.now() - safeUpdatedAt) / 1000))
+
+      return safeElapsed + elapsedWhileAway
+    } catch {
+      return 0
+    }
+  }
+
   const getStatusBadge = (status: Match["status"]) => {
     const variants = {
       scheduled: "secondary",
@@ -222,6 +273,28 @@ export function MatchList() {
   }
 
   const canManage = user?.role === "admin" || user?.role === "referee"
+  const filteredMatches = useMemo(() => {
+    const normalizedSearch = searchTerm.trim().toLowerCase()
+
+    return matches.filter((match) => {
+      const matchesStatus =
+        statusFilter === "all" ||
+        (statusFilter === "active" ? match.status !== "finished" : match.status === statusFilter)
+
+      if (!matchesStatus) return false
+      if (!normalizedSearch) return true
+
+      const homeTeam = getTeamName(match.homeTeamId).toLowerCase()
+      const awayTeam = getTeamName(match.awayTeamId).toLowerCase()
+      const venue = (match.venue || "").toLowerCase()
+      const date = new Date(match.date).toLocaleDateString("es-MX").toLowerCase()
+      const time = (match.time || "").toLowerCase()
+      const statusLabel =
+        match.status === "scheduled" ? "programado" : match.status === "live" ? "en vivo" : "finalizado"
+
+      return [homeTeam, awayTeam, venue, date, time, statusLabel].some((value) => value.includes(normalizedSearch))
+    })
+  }, [matches, searchTerm, statusFilter, teams])
 
   if (viewingMatchId) {
     const viewingMatch = matches.find((item) => item.id === viewingMatchId)
@@ -269,6 +342,28 @@ export function MatchList() {
         </SelectContent>
       </Select>
 
+      {selectedTournament && (
+        <div className="grid gap-3 md:grid-cols-2">
+          <Input
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+            placeholder="Buscar por equipo, sede, fecha u hora"
+          />
+          <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as MatchStatusFilter)}>
+            <SelectTrigger>
+              <SelectValue placeholder="Filtrar por estado" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="active">Activos (oculta finalizados)</SelectItem>
+              <SelectItem value="all">Todos</SelectItem>
+              <SelectItem value="scheduled">Solo programados</SelectItem>
+              <SelectItem value="live">Solo en vivo</SelectItem>
+              <SelectItem value="finished">Solo finalizados</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
       {!selectedTournament ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
@@ -298,9 +393,17 @@ export function MatchList() {
             )}
           </CardContent>
         </Card>
+      ) : filteredMatches.length === 0 ? (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <CalendarIcon className="mb-4 h-12 w-12 text-muted-foreground" />
+            <p className="mb-2 text-lg font-medium">No hay partidos para estos filtros</p>
+            <p className="text-sm text-muted-foreground">Ajusta la busqueda o cambia el filtro de estado</p>
+          </CardContent>
+        </Card>
       ) : (
         <div className="space-y-4">
-          {matches.map((match) => (
+          {filteredMatches.map((match) => (
             <Card key={match.id} className="cursor-pointer transition-shadow hover:shadow-lg" onClick={() => handleView(match.id)}>
               <CardHeader>
                 <div className="flex items-start justify-between">
@@ -316,6 +419,9 @@ export function MatchList() {
                         {match.time}
                       </span>
                     </CardDescription>
+                    {match.status === "live" && clockTick >= 0 && (
+                      <p className="mt-2 text-sm font-semibold text-green-700">Cronometro: {formatStopwatch(getLiveElapsedSeconds(match) ?? 0)}</p>
+                    )}
                   </div>
                   {getStatusBadge(match.status)}
                 </div>

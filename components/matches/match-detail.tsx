@@ -7,6 +7,7 @@ import { useToast } from "@/hooks/use-toast"
 import type { Match, MatchEvent, Player, Team } from "@/lib/types"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -25,6 +26,14 @@ function formatStopwatch(totalSeconds: number) {
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`
 }
 
+type MatchClockState = {
+  elapsedSeconds: number
+  isPaused: boolean
+  updatedAt: number
+}
+
+const MATCH_CLOCK_STORAGE_PREFIX = "match-stopwatch:"
+
 export function MatchDetail({ match, teams, onBack, onMatchUpdated }: MatchDetailProps) {
   const { user } = useAuth()
   const { toast } = useToast()
@@ -40,10 +49,12 @@ export function MatchDetail({ match, teams, onBack, onMatchUpdated }: MatchDetai
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
   const [isPaused, setIsPaused] = useState(false)
   const [isSubmittingEvent, setIsSubmittingEvent] = useState(false)
+  const [isFinishConfirmOpen, setIsFinishConfirmOpen] = useState(false)
 
   const homeTeam = teams.find((t) => t.id === currentMatch.homeTeamId)
   const awayTeam = teams.find((t) => t.id === currentMatch.awayTeamId)
   const canManage = user?.role === "admin" || user?.role === "referee"
+  const matchClockKey = `${MATCH_CLOCK_STORAGE_PREFIX}${currentMatch.id}`
 
   const selectablePlayers = useMemo(
     () => (selectedTeam === currentMatch.homeTeamId ? homePlayers : awayPlayers),
@@ -54,6 +65,49 @@ export function MatchDetail({ match, teams, onBack, onMatchUpdated }: MatchDetai
     setCurrentMatch(match)
     setSelectedTeam(match.homeTeamId)
   }, [match])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+
+    if (currentMatch.status === "finished") {
+      setElapsedSeconds(0)
+      setIsPaused(true)
+      window.localStorage.removeItem(matchClockKey)
+      return
+    }
+
+    const persisted = window.localStorage.getItem(matchClockKey)
+    if (persisted) {
+      try {
+        const parsed = JSON.parse(persisted) as MatchClockState
+        const safeElapsed = Number.isFinite(parsed.elapsedSeconds) ? Math.max(0, Math.floor(parsed.elapsedSeconds)) : 0
+        const safeIsPaused = Boolean(parsed.isPaused)
+        const safeUpdatedAt = Number.isFinite(parsed.updatedAt) ? parsed.updatedAt : Date.now()
+        const elapsedWhileAway = safeIsPaused ? 0 : Math.max(0, Math.floor((Date.now() - safeUpdatedAt) / 1000))
+
+        setElapsedSeconds(safeElapsed + elapsedWhileAway)
+        setIsPaused(safeIsPaused)
+      } catch {
+        window.localStorage.removeItem(matchClockKey)
+      }
+      return
+    }
+
+    if (currentMatch.status === "live") {
+      const fallbackSeconds = currentMatch.updatedAt
+        ? Math.max(0, Math.floor((Date.now() - new Date(currentMatch.updatedAt).getTime()) / 1000))
+        : 0
+
+      const bootstrapState: MatchClockState = {
+        elapsedSeconds: fallbackSeconds,
+        isPaused: false,
+        updatedAt: Date.now(),
+      }
+      window.localStorage.setItem(matchClockKey, JSON.stringify(bootstrapState))
+      setElapsedSeconds(fallbackSeconds)
+      setIsPaused(false)
+    }
+  }, [currentMatch.id, currentMatch.status, currentMatch.updatedAt, matchClockKey])
 
   useEffect(() => {
     const loadData = async () => {
@@ -94,6 +148,24 @@ export function MatchDetail({ match, teams, onBack, onMatchUpdated }: MatchDetai
     return () => window.clearInterval(timer)
   }, [currentMatch.status, isPaused])
 
+  useEffect(() => {
+    if (typeof window === "undefined") return
+
+    if (currentMatch.status === "finished") {
+      window.localStorage.removeItem(matchClockKey)
+      return
+    }
+
+    if (currentMatch.status !== "live") return
+
+    const payload: MatchClockState = {
+      elapsedSeconds,
+      isPaused,
+      updatedAt: Date.now(),
+    }
+    window.localStorage.setItem(matchClockKey, JSON.stringify(payload))
+  }, [currentMatch.status, elapsedSeconds, isPaused, matchClockKey])
+
   const persistMatch = async (partial: Partial<Match>) => {
     const payload: Match = {
       ...currentMatch,
@@ -132,6 +204,7 @@ export function MatchDetail({ match, teams, onBack, onMatchUpdated }: MatchDetai
     })
 
     if (!updatedMatch) return
+    setElapsedSeconds(0)
     setIsPaused(false)
 
     toast({
@@ -152,7 +225,11 @@ export function MatchDetail({ match, teams, onBack, onMatchUpdated }: MatchDetai
     })
 
     if (!updatedMatch) return
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem(matchClockKey)
+    }
     setIsPaused(true)
+    setIsFinishConfirmOpen(false)
 
     toast({
       title: "Partido finalizado",
@@ -286,7 +363,7 @@ export function MatchDetail({ match, teams, onBack, onMatchUpdated }: MatchDetai
                   <Pause className="mr-2 h-4 w-4" />
                   {isPaused ? "Reanudar" : "Pausar"}
                 </Button>
-                <Button onClick={() => void handleEndMatch()} variant="destructive" size="lg">
+                <Button onClick={() => setIsFinishConfirmOpen(true)} variant="destructive" size="lg">
                   <Square className="mr-2 h-4 w-4" />
                   Finalizar Partido
                 </Button>
@@ -296,6 +373,25 @@ export function MatchDetail({ match, teams, onBack, onMatchUpdated }: MatchDetai
           </div>
         </CardContent>
       </Card>
+
+      <Dialog open={isFinishConfirmOpen} onOpenChange={setIsFinishConfirmOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Finalizar partido</DialogTitle>
+            <DialogDescription>
+              Se cerrara el partido con marcador {currentMatch.homeScore ?? 0} - {currentMatch.awayScore ?? 0}. Esta accion detendra el cronometro.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-2">
+            <Button variant="destructive" className="flex-1" onClick={() => void handleEndMatch()}>
+              Confirmar finalizacion
+            </Button>
+            <Button variant="outline" onClick={() => setIsFinishConfirmOpen(false)}>
+              Cancelar
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {canManage && currentMatch.status === "live" && (
         <Card>

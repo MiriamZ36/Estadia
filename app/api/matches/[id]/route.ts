@@ -15,6 +15,7 @@ type MatchRow = {
   home_score: number | null
   away_score: number | null
   referee_id: string | null
+  updated_at: string
 }
 
 type TeamRow = {
@@ -83,6 +84,7 @@ function mapMatch(row: MatchRow) {
     homeScore: row.home_score ?? undefined,
     awayScore: row.away_score ?? undefined,
     refereeId: row.referee_id ?? undefined,
+    updatedAt: row.updated_at,
   }
 }
 
@@ -166,7 +168,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
 
   const { data: existingMatch, error: existingError } = await admin
     .from("matches")
-    .select("id, tournament_id, home_team_id, away_team_id, match_date, match_time, venue, status, home_score, away_score, referee_id")
+    .select("id, tournament_id, home_team_id, away_team_id, match_date, match_time, venue, status, home_score, away_score, referee_id, updated_at")
     .eq("id", id)
     .single()
 
@@ -213,7 +215,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       referee_id: merged.refereeId || null,
     })
     .eq("id", id)
-    .select("id, tournament_id, home_team_id, away_team_id, match_date, match_time, venue, status, home_score, away_score, referee_id")
+    .select("id, tournament_id, home_team_id, away_team_id, match_date, match_time, venue, status, home_score, away_score, referee_id, updated_at")
     .single()
 
   if (error || !data) {

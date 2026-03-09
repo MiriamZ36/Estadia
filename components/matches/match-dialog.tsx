@@ -3,10 +3,11 @@
 import type React from "react"
 
 import { useState, useEffect } from "react"
-import type { Match, Team } from "@/lib/types"
+import type { Match, Referee, Team } from "@/lib/types"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   Dialog,
   DialogContent,
@@ -29,6 +30,8 @@ interface MatchDialogProps {
 export function MatchDialog({ match, tournamentId, teams, open, onOpenChange, onSave, isSaving = false }: MatchDialogProps) {
   const [homeTeamSearch, setHomeTeamSearch] = useState("")
   const [awayTeamSearch, setAwayTeamSearch] = useState("")
+  const [referees, setReferees] = useState<Referee[]>([])
+  const [isLoadingReferees, setIsLoadingReferees] = useState(false)
   const [validationMessage, setValidationMessage] = useState("")
   const [formData, setFormData] = useState<Partial<Match>>({
     homeTeamId: "",
@@ -37,6 +40,7 @@ export function MatchDialog({ match, tournamentId, teams, open, onOpenChange, on
     time: "",
     venue: "",
     status: "scheduled",
+    refereeId: "",
   })
 
   useEffect(() => {
@@ -50,12 +54,33 @@ export function MatchDialog({ match, tournamentId, teams, open, onOpenChange, on
         time: "",
         venue: "",
         status: "scheduled",
+        refereeId: "",
       })
     }
     setHomeTeamSearch("")
     setAwayTeamSearch("")
     setValidationMessage("")
   }, [match, open])
+
+  useEffect(() => {
+    if (!open) return
+
+    const loadReferees = async () => {
+      setIsLoadingReferees(true)
+      const response = await fetch("/api/referees", { cache: "no-store" })
+      const result = await response.json()
+      setIsLoadingReferees(false)
+
+      if (!response.ok) {
+        setValidationMessage(result.error || "No fue posible cargar arbitros.")
+        return
+      }
+
+      setReferees(result.referees || [])
+    }
+
+    void loadReferees()
+  }, [open])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -82,7 +107,7 @@ export function MatchDialog({ match, tournamentId, teams, open, onOpenChange, on
       status: formData.status as Match["status"],
       homeScore: match?.homeScore,
       awayScore: match?.awayScore,
-      refereeId: match?.refereeId,
+      refereeId: formData.refereeId || undefined,
     }
 
     await onSave(matchData)
@@ -241,6 +266,29 @@ export function MatchDialog({ match, tournamentId, teams, open, onOpenChange, on
                   disabled={isSaving}
                   required
                 />
+              </div>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="referee">Arbitro (opcional)</Label>
+                <Select
+                  value={formData.refereeId || "none"}
+                  onValueChange={(value) => setFormData({ ...formData, refereeId: value === "none" ? "" : value })}
+                  disabled={isSaving || isLoadingReferees}
+                >
+                  <SelectTrigger id="referee">
+                    <SelectValue placeholder={isLoadingReferees ? "Cargando arbitros..." : "Seleccionar arbitro"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Sin arbitro asignado</SelectItem>
+                    {referees.map((referee) => (
+                      <SelectItem key={referee.id} value={referee.id}>
+                        {referee.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
           </div>
