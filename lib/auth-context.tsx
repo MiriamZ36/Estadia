@@ -22,6 +22,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<AuthActionResult>
   register: (name: string, email: string, password: string, role: User["role"]) => Promise<AuthActionResult>
   updateProfile: (data: UpdateProfileInput) => Promise<AuthActionResult>
+  changePassword: (newPassword: string) => Promise<AuthActionResult>
   logout: () => Promise<void>
   isLoading: boolean
 }
@@ -261,8 +262,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null)
   }
 
+  const changePassword = async (newPassword: string): Promise<AuthActionResult> => {
+    if (!newPassword || newPassword.length < 6) {
+      return {
+        success: false,
+        error: "La contrasena debe tener al menos 6 caracteres.",
+      }
+    }
+
+    const { error } = await supabase.auth.updateUser({ password: newPassword })
+
+    if (error) {
+      return {
+        success: false,
+        error: "No fue posible actualizar la contrasena.",
+      }
+    }
+
+    return {
+      success: true,
+      message: "Contrasena actualizada correctamente.",
+    }
+  }
+
   return (
-    <AuthContext.Provider value={{ user, login, register, updateProfile, logout, isLoading }}>
+    <AuthContext.Provider value={{ user, login, register, updateProfile, changePassword, logout, isLoading }}>
       {children}
     </AuthContext.Provider>
   )

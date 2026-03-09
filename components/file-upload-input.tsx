@@ -7,19 +7,23 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Upload, X } from "lucide-react"
-import { handleFileUpload } from "@/lib/file-upload"
+import { createSupabaseBrowserClient } from "@/lib/supabase/client"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { useToast } from "@/hooks/use-toast"
 
 interface FileUploadInputProps {
   label: string
   value?: string
   onChange: (value: string) => void
   accept?: string
+  folder?: string
 }
 
-export function FileUploadInput({ label, value, onChange, accept = "image/*" }: FileUploadInputProps) {
+export function FileUploadInput({ label, value, onChange, accept = "image/*", folder = "general" }: FileUploadInputProps) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [isUploading, setIsUploading] = useState(false)
+  const { toast } = useToast()
+  const supabase = createSupabaseBrowserClient()
 
   const handleClick = () => {
     inputRef.current?.click()
@@ -31,10 +35,31 @@ export function FileUploadInput({ label, value, onChange, accept = "image/*" }: 
 
     setIsUploading(true)
     try {
-      const dataUrl = await handleFileUpload(file)
-      onChange(dataUrl)
+      const extension = (file.name.split(".").pop() || "jpg").toLowerCase()
+      const id = typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}`
+      const path = `${folder}/${id}.${extension}`
+
+      const { error: uploadError } = await supabase.storage.from("fotos").upload(path, file, {
+        cacheControl: "3600",
+        upsert: true,
+      })
+
+      if (uploadError) {
+        throw uploadError
+      }
+
+      const {
+        data: { publicUrl },
+      } = supabase.storage.from("fotos").getPublicUrl(path)
+
+      onChange(publicUrl)
     } catch (error) {
       console.error("Error uploading file:", error)
+      toast({
+        variant: "destructive",
+        title: "No fue posible subir la imagen",
+        description: "Verifica permisos del bucket fotos e intenta nuevamente.",
+      })
     } finally {
       setIsUploading(false)
     }

@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import type { Player } from "./team-builder"
+import type { Player } from "@/lib/types"
 import { User, Hash, Save } from "lucide-react"
 import { FileUploadInput } from "@/components/file-upload-input"
 
@@ -23,9 +23,9 @@ export default function PlayerCard({ player, onUpdate, onPhotoUpload }: PlayerCa
     onUpdate(editedPlayer)
   }
 
-  const handlePhotoChange = (base64: string) => {
-    setEditedPlayer({ ...editedPlayer, photo: base64 })
-    onPhotoUpload(player.id, base64)
+  const handlePhotoChange = (photoUrl: string) => {
+    setEditedPlayer({ ...editedPlayer, photo: photoUrl })
+    onPhotoUpload(player.id, photoUrl)
   }
 
   return (
@@ -82,10 +82,11 @@ export default function PlayerCard({ player, onUpdate, onPhotoUpload }: PlayerCa
         <div className="space-y-2">
           <Label htmlFor="player-photo">Foto del Jugador</Label>
           <FileUploadInput
-            id="player-photo"
-            currentFile={editedPlayer.photo}
-            onFileChange={handlePhotoChange}
+            label="Foto del jugador"
+            value={editedPlayer.photo}
+            onChange={handlePhotoChange}
             accept="image/*"
+            folder="players"
           />
         </div>
 

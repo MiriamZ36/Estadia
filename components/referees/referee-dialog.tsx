@@ -86,6 +86,7 @@ export function RefereeDialog({ open, onOpenChange, referee, onSave, isSaving = 
                 label="Foto"
                 value={formData.photo}
                 onChange={(value) => setFormData({ ...formData, photo: value })}
+                folder="referees"
               />
             </div>
 
