@@ -50,9 +50,13 @@ export function TeamList() {
   const [progressState, setProgressState] = useState<ProgressState>(idleProgress)
 
   useEffect(() => {
-    void loadTournaments()
-    void loadTeams()
-    void loadPlayerCounts()
+    const loadInitialData = async () => {
+      openProgress("Cargando equipos", "Consultando torneos, equipos y jugadores.")
+      await Promise.all([loadTournaments(), loadTeams(), loadPlayerCounts()])
+      closeProgress()
+    }
+
+    void loadInitialData()
   }, [])
 
   const openProgress = (title: string, description: string) => {

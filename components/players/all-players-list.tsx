@@ -48,10 +48,14 @@ export function AllPlayersList() {
   const [progressState, setProgressState] = useState<ProgressState>(idleProgress)
 
   useEffect(() => {
-    void loadData()
+    void loadData(true)
   }, [])
 
-  const loadData = async () => {
+  const loadData = async (showProgress = false) => {
+    if (showProgress) {
+      openProgress("Cargando jugadores", "Consultando jugadores y equipos en la base de datos.")
+    }
+
     const [playersResponse, teamsResponse] = await Promise.all([
       fetch("/api/players", { cache: "no-store" }),
       fetch("/api/teams", { cache: "no-store" }),
@@ -59,6 +63,10 @@ export function AllPlayersList() {
 
     const playersResult = await playersResponse.json()
     const teamsResult = await teamsResponse.json()
+
+    if (showProgress) {
+      closeProgress()
+    }
 
     if (!playersResponse.ok || !teamsResponse.ok) {
       toast({

@@ -60,13 +60,18 @@ export function MatchList() {
   const [clockTick, setClockTick] = useState(0)
 
   useEffect(() => {
-    void loadTournaments()
+    void loadTournaments(true)
   }, [])
 
   useEffect(() => {
     if (!selectedTournament) return
-    void loadMatches(selectedTournament)
-    void loadTeams(selectedTournament)
+    const loadTournamentData = async () => {
+      openProgress("Cargando partidos", "Consultando partidos y equipos del torneo seleccionado.")
+      await Promise.all([loadMatches(selectedTournament), loadTeams(selectedTournament)])
+      closeProgress()
+    }
+
+    void loadTournamentData()
   }, [selectedTournament])
 
   useEffect(() => {
@@ -92,11 +97,19 @@ export function MatchList() {
     setProgressState(idleProgress)
   }
 
-  const loadTournaments = async () => {
+  const loadTournaments = async (showProgress = false) => {
+    if (showProgress) {
+      openProgress("Cargando torneos", "Consultando torneos disponibles.")
+    }
+
     const response = await fetch("/api/tournaments", {
       cache: "no-store",
     })
     const result = await response.json()
+
+    if (showProgress) {
+      closeProgress()
+    }
 
     if (!response.ok) {
       toast({

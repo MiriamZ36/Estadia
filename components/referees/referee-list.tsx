@@ -38,7 +38,7 @@ export function RefereeList() {
   const [searchTerm, setSearchTerm] = useState("")
 
   useEffect(() => {
-    void loadReferees()
+    void loadReferees(true)
   }, [])
 
   const openProgress = (title: string, description: string) => {
@@ -49,11 +49,19 @@ export function RefereeList() {
     setProgressState(idleProgress)
   }
 
-  const loadReferees = async () => {
+  const loadReferees = async (showProgress = false) => {
+    if (showProgress) {
+      openProgress("Cargando arbitros", "Consultando arbitros registrados.")
+    }
+
     const response = await fetch("/api/referees", {
       cache: "no-store",
     })
     const result = await response.json()
+
+    if (showProgress) {
+      closeProgress()
+    }
 
     if (!response.ok) {
       toast({

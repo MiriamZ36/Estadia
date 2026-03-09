@@ -7,6 +7,7 @@ import { useToast } from "@/hooks/use-toast"
 import type { Team, Tournament } from "@/lib/types"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { ProgressDialog } from "@/components/ui/progress-dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { AddTeamsDialog } from "./add-teams-dialog"
@@ -17,6 +18,18 @@ interface TournamentDetailProps {
   onBack: () => void
 }
 
+type ProgressState = {
+  open: boolean
+  title: string
+  description: string
+}
+
+const idleProgress: ProgressState = {
+  open: false,
+  title: "",
+  description: "",
+}
+
 export function TournamentDetail({ tournament, onBack }: TournamentDetailProps) {
   const { user } = useAuth()
   const { toast } = useToast()
@@ -24,16 +37,31 @@ export function TournamentDetail({ tournament, onBack }: TournamentDetailProps) 
   const [allTeams, setAllTeams] = useState<Team[]>([])
   const [isAddTeamsOpen, setIsAddTeamsOpen] = useState(false)
   const [currentTournament] = useState<Tournament>(tournament)
+  const [progressState, setProgressState] = useState<ProgressState>(idleProgress)
 
   useEffect(() => {
     void loadData()
   }, [tournament.id])
 
+  const openProgress = (title: string, description: string) => {
+    setProgressState({
+      open: true,
+      title,
+      description,
+    })
+  }
+
+  const closeProgress = () => {
+    setProgressState(idleProgress)
+  }
+
   const loadData = async () => {
+    openProgress("Cargando torneo", "Consultando equipos participantes y disponibles.")
     const response = await fetch("/api/teams", {
       cache: "no-store",
     })
     const result = await response.json()
+    closeProgress()
 
     if (!response.ok) {
       toast({
@@ -192,6 +220,8 @@ export function TournamentDetail({ tournament, onBack }: TournamentDetailProps) 
         availableTeams={availableTeams}
         onAdd={handleAddTeams}
       />
+
+      <ProgressDialog open={progressState.open} title={progressState.title} description={progressState.description} />
     </div>
   )
 }
