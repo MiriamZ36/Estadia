@@ -11,7 +11,20 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { ProgressDialog } from "@/components/ui/progress-dialog"
 import type { User as AppUser } from "@/lib/types"
+
+type ProgressState = {
+  open: boolean
+  title: string
+  description: string
+}
+
+const idleProgress: ProgressState = {
+  open: false,
+  title: "",
+  description: "",
+}
 
 export function UserProfile() {
   const { user, updateProfile, changePassword } = useAuth()
@@ -22,6 +35,7 @@ export function UserProfile() {
   const [isChangingPassword, setIsChangingPassword] = useState(false)
   const [isChangingPhoto, setIsChangingPhoto] = useState(false)
   const [profileUser, setProfileUser] = useState<AppUser | null>(null)
+  const [progressState, setProgressState] = useState<ProgressState>(idleProgress)
   const [passwordData, setPasswordData] = useState({
     newPassword: "",
     confirmPassword: "",
@@ -29,16 +43,30 @@ export function UserProfile() {
   const currentUser = profileUser || user
   const [photoDraft, setPhotoDraft] = useState("")
 
+  const openProgress = (title: string, description: string) => {
+    setProgressState({
+      open: true,
+      title,
+      description,
+    })
+  }
+
+  const closeProgress = () => {
+    setProgressState(idleProgress)
+  }
+
   useEffect(() => {
     setPhotoDraft(currentUser?.photo || "")
   }, [currentUser?.photo])
 
   useEffect(() => {
     const loadProfile = async () => {
+      openProgress("Cargando perfil", "Consultando informacion del usuario autenticado.")
       setIsLoadingProfile(true)
       const response = await fetch("/api/profile", { cache: "no-store" })
       const result = await response.json()
       setIsLoadingProfile(false)
+      closeProgress()
 
       if (!response.ok) {
         return
@@ -69,8 +97,10 @@ export function UserProfile() {
       return
     }
 
+    openProgress("Actualizando perfil", "Sincronizando los datos del perfil.")
     const response = await fetch("/api/profile", { cache: "no-store" })
     const refreshed = await response.json()
+    closeProgress()
     if (response.ok) {
       setProfileUser(refreshed.user || null)
     }
@@ -293,6 +323,8 @@ export function UserProfile() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ProgressDialog open={progressState.open} title={progressState.title} description={progressState.description} />
     </div>
   )
 }

@@ -42,7 +42,7 @@ export function CoachList() {
   const [assignmentFilter, setAssignmentFilter] = useState("all")
 
   useEffect(() => {
-    void loadData()
+    void loadData(true)
   }, [])
 
   const openProgress = (title: string, description: string) => {
@@ -53,7 +53,11 @@ export function CoachList() {
     setProgressState(idleProgress)
   }
 
-  const loadData = async () => {
+  const loadData = async (showProgress = false) => {
+    if (showProgress) {
+      openProgress("Cargando entrenadores", "Consultando entrenadores y equipos.")
+    }
+
     const [coachesResponse, teamsResponse] = await Promise.all([
       fetch("/api/coaches", { cache: "no-store" }),
       fetch("/api/teams", { cache: "no-store" }),
@@ -61,6 +65,10 @@ export function CoachList() {
 
     const coachesResult = await coachesResponse.json()
     const teamsResult = await teamsResponse.json()
+
+    if (showProgress) {
+      closeProgress()
+    }
 
     if (!coachesResponse.ok || !teamsResponse.ok) {
       toast({

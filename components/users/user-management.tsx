@@ -21,8 +21,21 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
+import { ProgressDialog } from "@/components/ui/progress-dialog"
 import type { User } from "@/lib/types"
 import { clearDataExceptUsers } from "@/lib/storage"
+
+type ProgressState = {
+  open: boolean
+  title: string
+  description: string
+}
+
+const idleProgress: ProgressState = {
+  open: false,
+  title: "",
+  description: "",
+}
 
 export function UserManagement() {
   const { user: currentUser, register } = useAuth()
@@ -45,17 +58,38 @@ export function UserManagement() {
     password: "",
     role: "fan" as User["role"],
   })
+  const [progressState, setProgressState] = useState<ProgressState>(idleProgress)
 
   useEffect(() => {
-    void loadUsers()
+    void loadUsers(true)
   }, [])
 
-  const loadUsers = async () => {
+  const openProgress = (title: string, description: string) => {
+    setProgressState({
+      open: true,
+      title,
+      description,
+    })
+  }
+
+  const closeProgress = () => {
+    setProgressState(idleProgress)
+  }
+
+  const loadUsers = async (showProgress = false) => {
+    if (showProgress) {
+      openProgress("Cargando usuarios", "Consultando usuarios y perfiles en la base de datos.")
+    }
+
     const response = await fetch("/api/admin/users", {
       cache: "no-store",
     })
 
     const result = await response.json()
+
+    if (showProgress) {
+      closeProgress()
+    }
 
     if (!response.ok) {
       toast({
@@ -470,6 +504,8 @@ export function UserManagement() {
           </form>
         </DialogContent>
       </Dialog>
+
+      <ProgressDialog open={progressState.open} title={progressState.title} description={progressState.description} />
     </div>
   )
 }

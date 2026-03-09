@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { ProgressDialog } from "@/components/ui/progress-dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 
@@ -50,6 +51,7 @@ export function MatchDetail({ match, teams, onBack, onMatchUpdated }: MatchDetai
   const [isPaused, setIsPaused] = useState(false)
   const [isSubmittingEvent, setIsSubmittingEvent] = useState(false)
   const [isFinishConfirmOpen, setIsFinishConfirmOpen] = useState(false)
+  const [isLoadingDetail, setIsLoadingDetail] = useState(false)
 
   const homeTeam = teams.find((t) => t.id === currentMatch.homeTeamId)
   const awayTeam = teams.find((t) => t.id === currentMatch.awayTeamId)
@@ -111,6 +113,7 @@ export function MatchDetail({ match, teams, onBack, onMatchUpdated }: MatchDetai
 
   useEffect(() => {
     const loadData = async () => {
+      setIsLoadingDetail(true)
       const [eventsResponse, homePlayersResponse, awayPlayersResponse] = await Promise.all([
         fetch(`/api/match-events?matchId=${currentMatch.id}`, { cache: "no-store" }),
         fetch(`/api/players?teamId=${currentMatch.homeTeamId}`, { cache: "no-store" }),
@@ -122,6 +125,7 @@ export function MatchDetail({ match, teams, onBack, onMatchUpdated }: MatchDetai
       const awayPlayersResult = await awayPlayersResponse.json()
 
       if (!eventsResponse.ok || !homePlayersResponse.ok || !awayPlayersResponse.ok) {
+        setIsLoadingDetail(false)
         toast({
           variant: "destructive",
           title: "No fue posible cargar el detalle del partido",
@@ -133,6 +137,7 @@ export function MatchDetail({ match, teams, onBack, onMatchUpdated }: MatchDetai
       setEvents(eventsResult.events || [])
       setHomePlayers(homePlayersResult.players || [])
       setAwayPlayers(awayPlayersResult.players || [])
+      setIsLoadingDetail(false)
     }
 
     void loadData()
@@ -392,6 +397,12 @@ export function MatchDetail({ match, teams, onBack, onMatchUpdated }: MatchDetai
           </div>
         </DialogContent>
       </Dialog>
+
+      <ProgressDialog
+        open={isLoadingDetail}
+        title="Cargando detalle del partido"
+        description="Consultando eventos y plantillas de ambos equipos."
+      />
 
       {canManage && currentMatch.status === "live" && (
         <Card>

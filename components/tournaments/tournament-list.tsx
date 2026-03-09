@@ -49,7 +49,7 @@ export function TournamentList() {
   const [formatFilter, setFormatFilter] = useState("all")
 
   useEffect(() => {
-    void loadData()
+    void loadData(true)
   }, [])
 
   const openProgress = (title: string, description: string) => {
@@ -64,13 +64,20 @@ export function TournamentList() {
     setProgressState(idleProgress)
   }
 
-  const loadData = async () => {
+  const loadData = async (showProgress = false) => {
+    if (showProgress) {
+      openProgress("Cargando torneos", "Consultando torneos y equipos en la base de datos.")
+    }
+
     const [tournamentsResponse, teamsResponse] = await Promise.all([
       fetch("/api/tournaments", { cache: "no-store" }),
       fetch("/api/teams", { cache: "no-store" }),
     ])
     const tournamentsResult = await tournamentsResponse.json()
     const teamsResult = await teamsResponse.json()
+    if (showProgress) {
+      closeProgress()
+    }
 
     if (!tournamentsResponse.ok || !teamsResponse.ok) {
       toast({
@@ -169,7 +176,7 @@ export function TournamentList() {
 
   const handleBackToList = async () => {
     setViewingTournament(null)
-    await loadData()
+    await loadData(true)
   }
 
   const getStatusBadge = (status: Tournament["status"]) => {

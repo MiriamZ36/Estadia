@@ -5,6 +5,7 @@ import { useToast } from "@/hooks/use-toast"
 import { calculatePlayerStats, getTeamForm } from "@/lib/stats-calculator"
 import type { Match, MatchEvent, Player, Tournament, Team, Standing } from "@/lib/types"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { ProgressDialog } from "@/components/ui/progress-dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
@@ -26,6 +27,18 @@ import {
 
 const COLORS = ["#10b981", "#3b82f6", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899"]
 
+type ProgressState = {
+  open: boolean
+  title: string
+  description: string
+}
+
+const idleProgress: ProgressState = {
+  open: false,
+  title: "",
+  description: "",
+}
+
 export function StatisticsView() {
   const { toast } = useToast()
   const [tournaments, setTournaments] = useState<Tournament[]>([])
@@ -37,11 +50,26 @@ export function StatisticsView() {
   const [goalsChartData, setGoalsChartData] = useState<any[]>([])
   const [performanceChartData, setPerformanceChartData] = useState<any[]>([])
   const [resultsDistribution, setResultsDistribution] = useState<any[]>([])
+  const [progressState, setProgressState] = useState<ProgressState>(idleProgress)
+
+  const openProgress = (title: string, description: string) => {
+    setProgressState({
+      open: true,
+      title,
+      description,
+    })
+  }
+
+  const closeProgress = () => {
+    setProgressState(idleProgress)
+  }
 
   useEffect(() => {
     const loadTournaments = async () => {
+      openProgress("Cargando estadisticas", "Consultando torneos disponibles.")
       const response = await fetch("/api/tournaments", { cache: "no-store" })
       const result = await response.json()
+      closeProgress()
 
       if (!response.ok) {
         toast({
@@ -69,6 +97,7 @@ export function StatisticsView() {
   }, [selectedTournament])
 
   const loadStatistics = async () => {
+    openProgress("Cargando estadisticas", "Consultando tabla, equipos, partidos y eventos.")
     const [teamsResponse, matchesResponse, standingsResponse] = await Promise.all([
       fetch(`/api/teams?tournamentId=${selectedTournament}`, { cache: "no-store" }),
       fetch(`/api/matches?tournamentId=${selectedTournament}`, { cache: "no-store" }),
@@ -80,6 +109,7 @@ export function StatisticsView() {
     const standingsResult = await standingsResponse.json()
 
     if (!teamsResponse.ok || !matchesResponse.ok || !standingsResponse.ok) {
+      closeProgress()
       toast({
         variant: "destructive",
         title: "No fue posible cargar estadísticas",
@@ -138,6 +168,7 @@ export function StatisticsView() {
       { name: "Empates", value: totalDraws, color: "#f59e0b" },
       { name: "Derrotas", value: totalLosses, color: "#ef4444" },
     ])
+    closeProgress()
   }
 
   const getTeamName = (teamId: string) => {
@@ -392,6 +423,8 @@ export function StatisticsView() {
           </TabsContent>
         </Tabs>
       )}
+
+      <ProgressDialog open={progressState.open} title={progressState.title} description={progressState.description} />
     </div>
   )
 }
