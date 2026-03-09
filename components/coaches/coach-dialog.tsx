@@ -56,6 +56,7 @@ export function CoachDialog({ open, onOpenChange, coach, teams, onSave, isSaving
   useEffect(() => {
     if (coach) {
       setFormData(coach)
+      setTeamSearch(coach.teamName || "")
     } else {
       setFormData({
         name: "",
@@ -67,8 +68,8 @@ export function CoachDialog({ open, onOpenChange, coach, teams, onSave, isSaving
         specialty: "",
         teamId: "",
       })
+      setTeamSearch("")
     }
-    setTeamSearch("")
   }, [coach, open])
 
   const filteredTeams = teams.filter((team) => team.name.toLowerCase().includes(teamSearch.trim().toLowerCase()))
@@ -201,7 +202,10 @@ export function CoachDialog({ open, onOpenChange, coach, teams, onSave, isSaving
                   <button
                     type="button"
                     className="w-full border-b px-3 py-2 text-left text-sm hover:bg-muted"
-                    onClick={() => setFormData({ ...formData, teamId: "" })}
+                    onClick={() => {
+                      setFormData({ ...formData, teamId: "" })
+                      setTeamSearch("")
+                    }}
                     disabled={isSaving}
                   >
                     Sin equipo asignado
@@ -211,7 +215,10 @@ export function CoachDialog({ open, onOpenChange, coach, teams, onSave, isSaving
                       key={team.id}
                       type="button"
                       className="w-full px-3 py-2 text-left text-sm hover:bg-muted"
-                      onClick={() => setFormData({ ...formData, teamId: team.id })}
+                      onClick={() => {
+                        setFormData({ ...formData, teamId: team.id })
+                        setTeamSearch(team.name)
+                      }}
                       disabled={isSaving}
                     >
                       {team.name}

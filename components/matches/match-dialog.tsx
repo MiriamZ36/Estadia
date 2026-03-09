@@ -3,10 +3,11 @@
 import type React from "react"
 
 import { useState, useEffect } from "react"
-import type { Match, Team } from "@/lib/types"
+import type { Match, Referee, Team } from "@/lib/types"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   Dialog,
   DialogContent,
@@ -15,7 +16,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 interface MatchDialogProps {
   match: Match | null
@@ -23,10 +23,16 @@ interface MatchDialogProps {
   teams: Team[]
   open: boolean
   onOpenChange: (open: boolean) => void
-  onSave: (match: Match) => void
+  onSave: (match: Match) => Promise<void>
+  isSaving?: boolean
 }
 
-export function MatchDialog({ match, tournamentId, teams, open, onOpenChange, onSave }: MatchDialogProps) {
+export function MatchDialog({ match, tournamentId, teams, open, onOpenChange, onSave, isSaving = false }: MatchDialogProps) {
+  const [homeTeamSearch, setHomeTeamSearch] = useState("")
+  const [awayTeamSearch, setAwayTeamSearch] = useState("")
+  const [referees, setReferees] = useState<Referee[]>([])
+  const [isLoadingReferees, setIsLoadingReferees] = useState(false)
+  const [validationMessage, setValidationMessage] = useState("")
   const [formData, setFormData] = useState<Partial<Match>>({
     homeTeamId: "",
     awayTeamId: "",
@@ -34,6 +40,7 @@ export function MatchDialog({ match, tournamentId, teams, open, onOpenChange, on
     time: "",
     venue: "",
     status: "scheduled",
+    refereeId: "",
   })
 
   useEffect(() => {
@@ -47,20 +54,50 @@ export function MatchDialog({ match, tournamentId, teams, open, onOpenChange, on
         time: "",
         venue: "",
         status: "scheduled",
+        refereeId: "",
       })
     }
-  }, [match])
+    setHomeTeamSearch("")
+    setAwayTeamSearch("")
+    setValidationMessage("")
+  }, [match, open])
 
-  const handleSubmit = (e: React.FormEvent) => {
+  useEffect(() => {
+    if (!open) return
+
+    const loadReferees = async () => {
+      setIsLoadingReferees(true)
+      const response = await fetch("/api/referees", { cache: "no-store" })
+      const result = await response.json()
+      setIsLoadingReferees(false)
+
+      if (!response.ok) {
+        setValidationMessage(result.error || "No fue posible cargar arbitros.")
+        return
+      }
+
+      setReferees(result.referees || [])
+    }
+
+    void loadReferees()
+  }, [open])
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (formData.homeTeamId === formData.awayTeamId) {
-      alert("Un equipo no puede jugar contra sí mismo")
+    if (!formData.homeTeamId || !formData.awayTeamId) {
+      setValidationMessage("Debes seleccionar equipo local y visitante.")
       return
     }
 
+    if (formData.homeTeamId === formData.awayTeamId) {
+      setValidationMessage("El equipo local y visitante no pueden ser el mismo.")
+      return
+    }
+    setValidationMessage("")
+
     const matchData: Match = {
-      id: match?.id || Date.now().toString(),
+      id: match?.id || "",
       tournamentId: match?.tournamentId || tournamentId,
       homeTeamId: formData.homeTeamId || "",
       awayTeamId: formData.awayTeamId || "",
@@ -70,15 +107,30 @@ export function MatchDialog({ match, tournamentId, teams, open, onOpenChange, on
       status: formData.status as Match["status"],
       homeScore: match?.homeScore,
       awayScore: match?.awayScore,
-      refereeId: match?.refereeId,
+      refereeId: formData.refereeId || undefined,
     }
 
-    onSave(matchData)
+    await onSave(matchData)
   }
 
+  const availableHomeTeams = teams.filter((team) => {
+    const matchesSearch = team.name.toLowerCase().includes(homeTeamSearch.trim().toLowerCase())
+    const differentFromAway = !formData.awayTeamId || team.id !== formData.awayTeamId
+    return matchesSearch && differentFromAway
+  })
+
+  const availableAwayTeams = teams.filter((team) => {
+    const matchesSearch = team.name.toLowerCase().includes(awayTeamSearch.trim().toLowerCase())
+    const differentFromHome = !formData.homeTeamId || team.id !== formData.homeTeamId
+    return matchesSearch && differentFromHome
+  })
+
+  const selectedHomeTeamName = teams.find((team) => team.id === formData.homeTeamId)?.name
+  const selectedAwayTeamName = teams.find((team) => team.id === formData.awayTeamId)?.name
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[525px]">
+    <Dialog open={open} onOpenChange={(nextOpen) => !isSaving && onOpenChange(nextOpen)}>
+      <DialogContent className="max-h-[90vh] w-[95vw] !max-w-[980px] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{match ? "Editar Partido" : "Programar Nuevo Partido"}</DialogTitle>
           <DialogDescription>
@@ -86,46 +138,102 @@ export function MatchDialog({ match, tournamentId, teams, open, onOpenChange, on
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit}>
-          <div className="grid gap-4 py-4">
+          <div className="grid gap-5 py-4">
+            {validationMessage && (
+              <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                {validationMessage}
+              </p>
+            )}
+
+            <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="homeTeam">Equipo Local</Label>
-              <Select
-                value={formData.homeTeamId}
-                onValueChange={(value) => setFormData({ ...formData, homeTeamId: value })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecciona equipo local" />
-                </SelectTrigger>
-                <SelectContent>
-                  {teams.map((team) => (
-                    <SelectItem key={team.id} value={team.id}>
-                      {team.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Input
+                id="homeTeamSearch"
+                value={homeTeamSearch}
+                onChange={(e) => setHomeTeamSearch(e.target.value)}
+                placeholder="Buscar equipo local..."
+                disabled={isSaving}
+              />
+              <div className="max-h-36 overflow-y-auto rounded-md border">
+                <button
+                  type="button"
+                  className="w-full border-b px-3 py-2 text-left text-sm text-muted-foreground hover:bg-muted"
+                  onClick={() => {
+                    setFormData({ ...formData, homeTeamId: "" })
+                    setHomeTeamSearch("")
+                  }}
+                  disabled={isSaving}
+                >
+                  Quitar seleccion
+                </button>
+                {availableHomeTeams.map((team) => (
+                  <button
+                    key={team.id}
+                    type="button"
+                    className="w-full px-3 py-2 text-left text-sm hover:bg-muted"
+                    onClick={() => {
+                      setValidationMessage("")
+                      setFormData({ ...formData, homeTeamId: team.id })
+                      setHomeTeamSearch(team.name)
+                    }}
+                    disabled={isSaving}
+                  >
+                    {team.name}
+                  </button>
+                ))}
+                {availableHomeTeams.length === 0 && (
+                  <p className="px-3 py-2 text-sm text-muted-foreground">No hay equipos disponibles</p>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">Seleccionado: {selectedHomeTeamName || "Ninguno"}</p>
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="awayTeam">Equipo Visitante</Label>
-              <Select
-                value={formData.awayTeamId}
-                onValueChange={(value) => setFormData({ ...formData, awayTeamId: value })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecciona equipo visitante" />
-                </SelectTrigger>
-                <SelectContent>
-                  {teams.map((team) => (
-                    <SelectItem key={team.id} value={team.id}>
-                      {team.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Input
+                id="awayTeamSearch"
+                value={awayTeamSearch}
+                onChange={(e) => setAwayTeamSearch(e.target.value)}
+                placeholder="Buscar equipo visitante..."
+                disabled={isSaving}
+              />
+              <div className="max-h-36 overflow-y-auto rounded-md border">
+                <button
+                  type="button"
+                  className="w-full border-b px-3 py-2 text-left text-sm text-muted-foreground hover:bg-muted"
+                  onClick={() => {
+                    setFormData({ ...formData, awayTeamId: "" })
+                    setAwayTeamSearch("")
+                  }}
+                  disabled={isSaving}
+                >
+                  Quitar seleccion
+                </button>
+                {availableAwayTeams.map((team) => (
+                  <button
+                    key={team.id}
+                    type="button"
+                    className="w-full px-3 py-2 text-left text-sm hover:bg-muted"
+                    onClick={() => {
+                      setValidationMessage("")
+                      setFormData({ ...formData, awayTeamId: team.id })
+                      setAwayTeamSearch(team.name)
+                    }}
+                    disabled={isSaving}
+                  >
+                    {team.name}
+                  </button>
+                ))}
+                {availableAwayTeams.length === 0 && (
+                  <p className="px-3 py-2 text-sm text-muted-foreground">No hay equipos disponibles</p>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">Seleccionado: {selectedAwayTeamName || "Ninguno"}</p>
+            </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-4 md:grid-cols-3">
               <div className="space-y-2">
                 <Label htmlFor="date">Fecha</Label>
                 <Input
@@ -133,6 +241,7 @@ export function MatchDialog({ match, tournamentId, teams, open, onOpenChange, on
                   type="date"
                   value={formData.date}
                   onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                  disabled={isSaving}
                   required
                 />
               </div>
@@ -143,27 +252,53 @@ export function MatchDialog({ match, tournamentId, teams, open, onOpenChange, on
                   type="time"
                   value={formData.time}
                   onChange={(e) => setFormData({ ...formData, time: e.target.value })}
+                  disabled={isSaving}
+                  required
+                />
+              </div>
+              <div className="space-y-2 md:col-span-1">
+                <Label htmlFor="venue">Cancha/Lugar</Label>
+                <Input
+                  id="venue"
+                  value={formData.venue}
+                  onChange={(e) => setFormData({ ...formData, venue: e.target.value })}
+                  placeholder="Cancha Municipal #1"
+                  disabled={isSaving}
                   required
                 />
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="venue">Cancha/Lugar</Label>
-              <Input
-                id="venue"
-                value={formData.venue}
-                onChange={(e) => setFormData({ ...formData, venue: e.target.value })}
-                placeholder="Cancha Municipal #1"
-                required
-              />
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="referee">Arbitro (opcional)</Label>
+                <Select
+                  value={formData.refereeId || "none"}
+                  onValueChange={(value) => setFormData({ ...formData, refereeId: value === "none" ? "" : value })}
+                  disabled={isSaving || isLoadingReferees}
+                >
+                  <SelectTrigger id="referee">
+                    <SelectValue placeholder={isLoadingReferees ? "Cargando arbitros..." : "Seleccionar arbitro"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Sin arbitro asignado</SelectItem>
+                    {referees.map((referee) => (
+                      <SelectItem key={referee.id} value={referee.id}>
+                        {referee.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </div>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSaving}>
               Cancelar
             </Button>
-            <Button type="submit">{match ? "Guardar Cambios" : "Programar Partido"}</Button>
+            <Button type="submit" disabled={isSaving}>
+              {isSaving ? "Guardando..." : match ? "Guardar Cambios" : "Programar Partido"}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>

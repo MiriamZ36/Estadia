@@ -11,6 +11,8 @@ import { ProgressDialog } from "@/components/ui/progress-dialog"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   Dialog,
   DialogContent,
@@ -42,6 +44,9 @@ export function TournamentList() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [progressState, setProgressState] = useState<ProgressState>(idleProgress)
+  const [searchTerm, setSearchTerm] = useState("")
+  const [statusFilter, setStatusFilter] = useState("all")
+  const [formatFilter, setFormatFilter] = useState("all")
 
   useEffect(() => {
     void loadData()
@@ -188,6 +193,17 @@ export function TournamentList() {
   }
 
   const canManage = user?.role === "admin"
+  const filteredTournaments = tournaments.filter((tournament) => {
+    const normalizedSearch = searchTerm.trim().toLowerCase()
+    const matchesSearch =
+      !normalizedSearch ||
+      tournament.name.toLowerCase().includes(normalizedSearch) ||
+      (tournament.rules || "").toLowerCase().includes(normalizedSearch)
+    const matchesStatus = statusFilter === "all" || tournament.status === statusFilter
+    const matchesFormat = formatFilter === "all" || tournament.format === formatFilter
+
+    return matchesSearch && matchesStatus && matchesFormat
+  })
 
   if (viewingTournament) {
     return <TournamentDetail tournament={viewingTournament} onBack={() => void handleBackToList()} />
@@ -208,12 +224,42 @@ export function TournamentList() {
         )}
       </div>
 
-      {tournaments.length === 0 ? (
+      <div className="grid gap-3 md:grid-cols-3">
+        <Input
+          value={searchTerm}
+          onChange={(event) => setSearchTerm(event.target.value)}
+          placeholder="Buscar por nombre o reglas"
+        />
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger>
+            <SelectValue placeholder="Filtrar por estado" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos los estados</SelectItem>
+            <SelectItem value="upcoming">Proximo</SelectItem>
+            <SelectItem value="active">En curso</SelectItem>
+            <SelectItem value="completed">Finalizado</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={formatFilter} onValueChange={setFormatFilter}>
+          <SelectTrigger>
+            <SelectValue placeholder="Filtrar por formato" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos los formatos</SelectItem>
+            <SelectItem value="5">Futbol 5</SelectItem>
+            <SelectItem value="7">Futbol 7</SelectItem>
+            <SelectItem value="11">Futbol 11</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {filteredTournaments.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
             <Calendar className="mb-4 h-12 w-12 text-muted-foreground" />
-            <p className="mb-2 text-lg font-medium">No hay torneos registrados</p>
-            <p className="mb-4 text-sm text-muted-foreground">Comienza creando tu primer torneo</p>
+            <p className="mb-2 text-lg font-medium">No se encontraron torneos</p>
+            <p className="mb-4 text-sm text-muted-foreground">Ajusta la busqueda o los filtros para ver resultados</p>
             {canManage && (
               <Button onClick={handleCreate}>
                 <Plus className="mr-2 h-4 w-4" />
@@ -224,7 +270,7 @@ export function TournamentList() {
         </Card>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {tournaments.map((tournament) => (
+          {filteredTournaments.map((tournament) => (
             <Card key={tournament.id} className="transition-shadow hover:shadow-lg">
               <CardHeader>
                 <div className="flex items-start justify-between">
