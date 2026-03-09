@@ -207,6 +207,18 @@ export function StatisticsView() {
                 <CardDescription>Clasificación actualizada del torneo</CardDescription>
               </CardHeader>
               <CardContent>
+                <div className="mb-4 rounded-lg border bg-muted/40 p-3 text-xs text-muted-foreground">
+                  <span className="font-medium text-foreground">Simbologia:</span>{" "}
+                  <span className="mr-2">PJ: Partidos Jugados</span>
+                  <span className="mr-2">G: Ganados</span>
+                  <span className="mr-2">E: Empatados</span>
+                  <span className="mr-2">P: Perdidos</span>
+                  <span className="mr-2">GF: Goles a Favor</span>
+                  <span className="mr-2">GC: Goles en Contra</span>
+                  <span className="mr-2">DG: Diferencia de Gol</span>
+                  <span className="mr-2">Pts: Puntos</span>
+                  <span>Forma: ultimos 5 (G/E/P)</span>
+                </div>
                 {standings.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
                     <p>No hay datos suficientes para generar la tabla</p>
